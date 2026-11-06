@@ -238,7 +238,7 @@ for (const auth of ["mas", "legacy"] as const) {
         test.describe(`Restricted guests auth=${auth} guests=${guestsEnabled}`, () => {
             test("should not error if config is missing", async ({ page }) => {
                 await page.goto("/");
-                await expect(page.getByText("Your Element is misconfigured")).not.toBeVisible();
+                await expect(page.getByText("This app is misconfigured")).not.toBeVisible();
                 await expect(page.getByText("Errors in module configuration")).not.toBeVisible();
             });
 
@@ -253,7 +253,7 @@ for (const auth of ["mas", "legacy"] as const) {
 
                 test("should render error", async ({ page }) => {
                     await page.goto("/");
-                    await expect(page.getByText("Your Element is misconfigured")).toBeVisible();
+                    await expect(page.getByText("This app is misconfigured")).toBeVisible();
                     await expect(page.getByText("Errors in module configuration")).toBeVisible();
                 });
             });

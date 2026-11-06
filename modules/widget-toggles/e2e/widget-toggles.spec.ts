@@ -91,7 +91,7 @@ test.describe("widget-toggles", () => {
     });
 
     test("should not error if config is missing", async ({ page }) => {
-        await expect(page.getByText("Your Element is misconfigured")).not.toBeVisible();
+        await expect(page.getByText("This app is misconfigured")).not.toBeVisible();
         await expect(page.getByText("Errors in module configuration")).not.toBeVisible();
         // We don't take a screenshot as we don't want to assert Element's styling, only our own
     });
@@ -106,7 +106,7 @@ test.describe("widget-toggles", () => {
         });
 
         test("should render error", async ({ page }) => {
-            await expect(page.getByText("Your Element is misconfigured")).toBeVisible();
+            await expect(page.getByText("This app is misconfigured")).toBeVisible();
             await expect(page.getByText("Errors in module configuration")).toBeVisible();
             // We don't take a screenshot as we don't want to assert Element's styling, only our own
         });
