@@ -7,11 +7,12 @@ SPDX-License-Identifier: AGPL-3.0-only OR GPL-3.0-only OR LicenseRef-Element-Com
 Please see LICENSE files in the repository root for full details.
 */
 
-import React, { useCallback, type JSX } from "react";
+import React, { useCallback, useState, type JSX } from "react";
 
 import { _t } from "../../../languageHandler";
 import BaseDialog from "./BaseDialog";
 import DialogButtons from "../elements/DialogButtons";
+import Field from "../elements/Field";
 import { fileSize } from "../../../utils/FileUtils";
 import {
     attachmentIcon,
@@ -21,6 +22,8 @@ import {
     useCreateAutoDisposedViewModel,
 } from "@element-hq/web-shared-components";
 import { MediaPreviewGroupViewModel } from "../../../viewmodels/message-body/MediaPreviewGroupViewModel";
+import { getKeyBindingsManager } from "../../../KeyBindingsManager";
+import { KeyBindingAction } from "../../../accessibility/KeyboardShortcuts";
 
 interface IProps {
     file: File;
@@ -28,7 +31,11 @@ interface IProps {
     currentIndex?: number;
     /** Defaults to 1. */
     totalFiles?: number;
-    onFinished: (uploadConfirmed: boolean, uploadAll?: boolean) => void;
+    /**
+     * `caption` is the message typed with this file, sent with it as a media caption (MSC2530).
+     * Empty when the user did not type one.
+     */
+    onFinished: (uploadConfirmed: boolean, uploadAll?: boolean, caption?: string) => void;
 }
 
 const previewableFormats = ["video", "audio", "image"];
@@ -104,6 +111,7 @@ export default function UploadConfirmDialog({
     onFinished,
 }: IProps): JSX.Element {
     const vm = useCreateAutoDisposedViewModel(() => new UploadPreviewViewModel(file));
+    const [caption, setCaption] = useState("");
 
     let title: string;
     if (totalFiles > 1 && currentIndex !== undefined) {
@@ -120,12 +128,25 @@ export default function UploadConfirmDialog({
     }, [onFinished]);
 
     const onUploadClick = useCallback((): void => {
-        onFinished(true);
-    }, [onFinished]);
+        onFinished(true, false, caption.trim());
+    }, [onFinished, caption]);
 
     const onUploadAllClick = useCallback((): void => {
-        onFinished(true, true);
-    }, [onFinished]);
+        onFinished(true, true, caption.trim());
+    }, [onFinished, caption]);
+
+    const onCaptionKeyDown = useCallback(
+        (ev: React.KeyboardEvent): void => {
+            // Same keys as the message composer: Enter sends (or Ctrl+Enter, per the user's setting),
+            // Shift+Enter starts a new line, and nothing is sent while an IME composition is in progress.
+            if (ev.nativeEvent.isComposing) return;
+            if (getKeyBindingsManager().getMessageComposerAction(ev) === KeyBindingAction.SendMessage) {
+                ev.preventDefault();
+                onUploadClick();
+            }
+        },
+        [onUploadClick],
+    );
 
     let uploadAllButton: JSX.Element | undefined;
     if (currentIndex + 1 < totalFiles) {
@@ -150,13 +171,23 @@ export default function UploadConfirmDialog({
                         <MediaPreviewGroupPreview vm={vm} />
                     </div>
                 </div>
+                <Field
+                    className="mx_UploadConfirmDialog_caption"
+                    element="textarea"
+                    label={_t("upload_file|caption_label")}
+                    rows={2}
+                    autoComplete="off"
+                    autoFocus={true}
+                    value={caption}
+                    onChange={(ev) => setCaption(ev.target.value)}
+                    onKeyDown={onCaptionKeyDown}
+                />
             </div>
 
             <DialogButtons
                 primaryButton={_t("action|upload")}
                 hasCancel={false}
                 onPrimaryButtonClick={onUploadClick}
-                focus={true}
             >
                 {uploadAllButton}
             </DialogButtons>

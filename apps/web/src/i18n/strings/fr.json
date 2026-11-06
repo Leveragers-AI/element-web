@@ -3820,6 +3820,7 @@
     "upload_failed_title": "Échec de l’envoi",
     "upload_file": {
         "cancel_all_button": "Tout annuler",
+        "caption_label": "Ajouter un message",
         "error_file_too_large": "Le fichier est <b>trop lourd</b> pour être envoyé. La taille limite est de %(limit)s mais la taille de ce fichier est de %(sizeOfThisFile)s.",
         "error_files_too_large": "Ces fichiers sont <b>trop lourds</b> pour être envoyés. La taille limite des fichiers est de %(limit)s.",
         "error_some_files_too_large": "Certains fichiers sont <b>trop lourds</b> pour être envoyés. La taille limite des fichiers est de %(limit)s.",

@@ -9,6 +9,7 @@ Please see LICENSE files in the repository root for full details.
 
 import React from "react";
 import { render, waitFor } from "test-utils-rtl";
+import userEvent from "@testing-library/user-event";
 import { secureRandomString } from "matrix-js-sdk/src/randomstring";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
@@ -109,5 +110,59 @@ describe("<UploadConfirmDialog />", () => {
 
         expect(getByText("notes.txt")).toBeInTheDocument();
         expect(container.querySelector("img, video, audio")).toBeNull();
+    });
+
+    describe("message sent with the file", () => {
+        const file = new File(["hello"], "notes.txt", { type: "text/plain" });
+
+        it("gives no message when nothing was typed", async () => {
+            const onFinished = vi.fn();
+            const { getByRole } = render(<UploadConfirmDialog file={file} onFinished={onFinished} />);
+
+            await userEvent.click(getByRole("button", { name: "Upload" }));
+
+            expect(onFinished).toHaveBeenCalledWith(true, false, "");
+        });
+
+        it("focuses the message field so the user can type straight away", () => {
+            const { getByRole } = render(<UploadConfirmDialog file={file} onFinished={vi.fn()} />);
+
+            expect(getByRole("textbox", { name: "Add a message" })).toHaveFocus();
+        });
+
+        it("gives the typed message, trimmed, when Upload is clicked", async () => {
+            const onFinished = vi.fn();
+            const { getByRole } = render(<UploadConfirmDialog file={file} onFinished={onFinished} />);
+
+            await userEvent.type(getByRole("textbox", { name: "Add a message" }), "  Please summarise this  ");
+            await userEvent.click(getByRole("button", { name: "Upload" }));
+
+            expect(onFinished).toHaveBeenCalledWith(true, false, "Please summarise this");
+        });
+
+        it("uploads with the message on Enter, and Shift+Enter starts a new line", async () => {
+            const onFinished = vi.fn();
+            const { getByRole } = render(<UploadConfirmDialog file={file} onFinished={onFinished} />);
+            const field = getByRole("textbox", { name: "Add a message" });
+
+            await userEvent.type(field, "First line{Shift>}{Enter}{/Shift}Second line");
+            expect(onFinished).not.toHaveBeenCalled();
+            expect(field).toHaveValue("First line\nSecond line");
+
+            await userEvent.type(field, "{Enter}");
+            expect(onFinished).toHaveBeenCalledWith(true, false, "First line\nSecond line");
+        });
+
+        it("gives the typed message with Upload all", async () => {
+            const onFinished = vi.fn();
+            const { getByRole } = render(
+                <UploadConfirmDialog file={file} currentIndex={0} totalFiles={2} onFinished={onFinished} />,
+            );
+
+            await userEvent.type(getByRole("textbox", { name: "Add a message" }), "For the first file");
+            await userEvent.click(getByRole("button", { name: "Upload all" }));
+
+            expect(onFinished).toHaveBeenCalledWith(true, true, "For the first file");
+        });
     });
 });

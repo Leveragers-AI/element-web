@@ -34,6 +34,21 @@ test.describe("Image Upload", () => {
         await expect(page.locator(".mx_Dialog")).toMatchScreenshot("image-upload-preview.png");
     });
 
+    test("should send a message typed in the upload dialog as the caption of the image", async ({ page, app }) => {
+        await app.setComposerInputFiles("room", getSampleFilePath("riot.png"));
+
+        const dialog = page.locator(".mx_Dialog");
+        const message = dialog.getByRole("textbox", { name: "Add a message" });
+        await expect(message).toBeFocused();
+        await message.fill("What is in this picture?");
+        await dialog.getByRole("button", { name: "Upload" }).click();
+
+        await app.timeline.scrollToBottom();
+        const tile = page.locator(".mx_EventTile_last");
+        await expect(tile.locator(".mx_ImageBody")).toBeVisible();
+        await expect(tile.getByText("What is in this picture?")).toBeVisible();
+    });
+
     test("should allow upload via drag and drop", { tag: "@screenshot" }, async ({ page, app }) => {
         await app.composerDragAndUploadFiles("room", getSampleFilePath("riot.png"), "image/png");
         await app.timeline.scrollToBottom();

@@ -268,6 +268,38 @@ describe("ContentMessages", () => {
             );
         });
 
+        it("should send a typed message as the caption of the file (MSC2530)", async () => {
+            vi.mocked(client.uploadContent).mockResolvedValue({ content_uri: "mxc://server/file" });
+            const file = new File([], "report.pdf", { type: "application/pdf" });
+            await contentMessages.sendContentToRoom(
+                file,
+                roomId,
+                undefined,
+                client,
+                undefined,
+                undefined,
+                "  Please summarise this report  ",
+            );
+            expect(client.sendMessage).toHaveBeenCalledWith(
+                roomId,
+                null,
+                expect.objectContaining({
+                    msgtype: "m.file",
+                    body: "Please summarise this report",
+                    filename: "report.pdf",
+                }),
+            );
+        });
+
+        it.each([undefined, "", "   "])("should send the file name alone when the caption is %j", async (caption) => {
+            vi.mocked(client.uploadContent).mockResolvedValue({ content_uri: "mxc://server/file" });
+            const file = new File([], "report.pdf", { type: "application/pdf" });
+            await contentMessages.sendContentToRoom(file, roomId, undefined, client, undefined, undefined, caption);
+            const content = vi.mocked(client.sendMessage).mock.calls[0][2] as unknown as Record<string, unknown>;
+            expect(content.body).toBe("report.pdf");
+            expect(content).not.toHaveProperty("filename");
+        });
+
         it("should keep RoomUpload's total and loaded values up to date", async () => {
             vi.mocked(client.uploadContent).mockResolvedValue({ content_uri: "mxc://server/file" });
             const file = new File([], "", { type: "text/plain" });
@@ -476,6 +508,67 @@ describe("uploadFile", () => {
         await expect(uploadFile(client, "!roomId:server", file, undefined, controller)).rejects.toThrow(
             UploadCanceledError,
         );
+    });
+});
+
+describe("sendContentListToRoom captions", () => {
+    const roomId = "!roomId:server";
+    let client: MatrixClient;
+    let contentMessages: ContentMessages;
+
+    beforeEach(() => {
+        client = createTestClient();
+        vi.mocked(client.getMediaConfig).mockResolvedValue({});
+        vi.mocked(doMaybeLocalRoomAction).mockImplementation(
+            <T>(roomId: string, fn: (actualRoomId: string) => Promise<T>) => fn(roomId),
+        );
+        contentMessages = new ContentMessages();
+        vi.spyOn(contentMessages, "sendContentToRoom").mockResolvedValue(undefined);
+        vi.spyOn(PosthogAnalytics.instance, "trackEvent").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("sends each file with the message typed in its own confirmation dialog", async () => {
+        const answers = [
+            [true, false, "About the first file"],
+            [true, false, ""],
+        ];
+        vi.spyOn(Modal, "createDialog").mockImplementation((component: unknown) => {
+            if (component === UploadConfirmDialog) {
+                return { finished: Promise.resolve(answers.shift()) } as any;
+            }
+            return { finished: new Promise(() => {}), close: vi.fn() } as any;
+        });
+        const files = [new File(["a"], "a.txt", { type: "text/plain" }), new File(["b"], "b.txt", { type: "text/plain" })];
+
+        await contentMessages.sendContentListToRoom(files, roomId, undefined, undefined, client);
+
+        const calls = vi.mocked(contentMessages.sendContentToRoom).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[0][0]).toBe(files[0]);
+        expect(calls[0][6]).toBe("About the first file");
+        expect(calls[1][0]).toBe(files[1]);
+        expect(calls[1][6]).toBe("");
+    });
+
+    it("puts the message on the shown file only when Upload all is chosen", async () => {
+        vi.spyOn(Modal, "createDialog").mockImplementation((component: unknown) => {
+            if (component === UploadConfirmDialog) {
+                return { finished: Promise.resolve([true, true, "About the first file"]) } as any;
+            }
+            return { finished: new Promise(() => {}), close: vi.fn() } as any;
+        });
+        const files = [new File(["a"], "a.txt", { type: "text/plain" }), new File(["b"], "b.txt", { type: "text/plain" })];
+
+        await contentMessages.sendContentListToRoom(files, roomId, undefined, undefined, client);
+
+        const calls = vi.mocked(contentMessages.sendContentToRoom).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[0][6]).toBe("About the first file");
+        expect(calls[1][6]).toBeUndefined();
     });
 });
 
