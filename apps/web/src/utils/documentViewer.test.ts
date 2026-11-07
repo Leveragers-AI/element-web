@@ -13,6 +13,7 @@ import { EventType, MatrixEvent, MsgType } from "matrix-js-sdk/src/matrix";
 import { documentMediaForEvent, documentViewerForEvent, openDocumentViewer } from "./documentViewer";
 import { type MediaEventHelper } from "./MediaEventHelper";
 import defaultDispatcher from "../dispatcher/dispatcher";
+import Modal from "../Modal";
 import { Action } from "../dispatcher/actions";
 
 function mkFileEvent(body: string, info?: Record<string, unknown>): MatrixEvent {
@@ -98,12 +99,16 @@ describe("openDocumentViewer", () => {
         vi.restoreAllMocks();
     });
 
-    it("dispatches the open action for the event", () => {
+    it("opens the document in a dialog over the app", async () => {
+        const createDialog = vi.spyOn(Modal, "createDialog").mockReturnValue({} as any);
         const dispatch = vi.spyOn(defaultDispatcher, "dispatch").mockImplementation(() => {});
         const mxEvent = mkFileEvent("README.md", { mimetype: "text/markdown" });
 
         openDocumentViewer(mxEvent);
 
-        expect(dispatch).toHaveBeenCalledWith({ action: Action.OpenDocumentViewer, event: mxEvent });
+        await vi.waitFor(() => expect(createDialog).toHaveBeenCalled());
+        expect(createDialog.mock.calls[0][1]).toEqual({ mxEvent });
+        expect(createDialog.mock.calls[0][2]).toBe("mx_DocumentViewerDialog_wrapper");
+        expect(dispatch).not.toHaveBeenCalledWith({ action: Action.OpenDocumentViewer, event: mxEvent });
     });
 });

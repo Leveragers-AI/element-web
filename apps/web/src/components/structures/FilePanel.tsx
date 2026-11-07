@@ -10,7 +10,7 @@ Please see LICENSE files in the repository root for full details.
 import React, { createRef } from "react";
 import {
     Filter,
-    type EventTimelineSet,
+    EventTimelineSet,
     type IRoomTimelineData,
     type Direction,
     type MatrixEvent,
@@ -24,6 +24,7 @@ import FilesIcon from "@vector-im/compound-design-tokens/assets/web/icons/files"
 
 import { MatrixClientPeg } from "../../MatrixClientPeg";
 import EventIndexPeg from "../../indexing/EventIndexPeg";
+import { paginateServerFileScan, scanServerForFiles } from "../../indexing/ServerFileScanner";
 import { _t } from "../../languageHandler";
 import SearchWarning, { WarningKind } from "../views/elements/SearchWarning";
 import BaseCard from "../views/right_panel/BaseCard";
@@ -57,6 +58,9 @@ class FilePanel extends React.Component<IProps, IState> {
     // added to the timeline.
     private decryptingEvents = new Set<string>();
     public noRoom = false;
+    // Encrypted room without an event index (the web): files are found by reading the room history,
+    // see ServerFileScanner.
+    private serverScan = false;
     private card = createRef<HTMLDivElement>();
 
     public state: IState = {
@@ -127,7 +131,7 @@ class FilePanel extends React.Component<IProps, IState> {
         // We do this only for encrypted rooms and if an event index exists,
         // this could be made more general in the future or the filter logic
         // could be fixed.
-        if (EventIndexPeg.get() !== null) {
+        if (EventIndexPeg.get() !== null || this.serverScan) {
             client.on(RoomEvent.Timeline, this.onRoomTimeline);
             client.on(MatrixEventEvent.Decrypted, this.onEventDecrypted);
         }
@@ -139,7 +143,7 @@ class FilePanel extends React.Component<IProps, IState> {
 
         if (!client.isRoomEncrypted(this.props.roomId)) return;
 
-        if (EventIndexPeg.get() !== null) {
+        if (EventIndexPeg.get() !== null || this.serverScan) {
             client.removeListener(RoomEvent.Timeline, this.onRoomTimeline);
             client.removeListener(MatrixEventEvent.Decrypted, this.onEventDecrypted);
         }
@@ -179,6 +183,8 @@ class FilePanel extends React.Component<IProps, IState> {
         // out events containing URLs
         if (room && client.isRoomEncrypted(roomId) && eventIndex !== null) {
             return eventIndex.paginateTimelineWindow(room, timelineWindow, direction, limit);
+        } else if (room && this.serverScan) {
+            return paginateServerFileScan(client, room, timelineWindow, direction, limit);
         } else {
             return timelineWindow.paginate(direction, limit);
         }
@@ -199,6 +205,15 @@ class FilePanel extends React.Component<IProps, IState> {
             let timelineSet;
 
             try {
+                if (client.isRoomEncrypted(roomId) && eventIndex === null) {
+                    // The server cannot tell which encrypted events are files: read the history here.
+                    this.serverScan = true;
+                    const scanned = new EventTimelineSet(room, { timelineSupport: true }, client);
+                    await scanServerForFiles(client, room, scanned.getLiveTimeline(), 10);
+                    this.setState({ timelineSet: scanned });
+                    return;
+                }
+
                 timelineSet = await this.fetchFileEventsServer(room);
 
                 // If this room is encrypted the file panel won't be populated
@@ -286,7 +301,7 @@ class FilePanel extends React.Component<IProps, IState> {
                         header={_t("right_panel|files_button")}
                     >
                         <Measured sensor={this.card} onMeasurement={this.onMeasurement} />
-                        <SearchWarning isRoomEncrypted={isRoomEncrypted} kind={WarningKind.Files} />
+                        <SearchWarning isRoomEncrypted={isRoomEncrypted && !this.serverScan} kind={WarningKind.Files} />
                         <EventPresentationContextProvider layout={Layout.Group}>
                             <TimelinePanel
                                 manageReadReceipts={false}

@@ -92,9 +92,41 @@ export function documentMediaForEvent(mxEvent: MatrixEvent, helper?: MediaEventH
  * Dispatched rather than calling RightPanelStore directly: this module is reached from the message
  * body view models, and the store leads back round to the message bodies via SDKContextClass.
  */
-export function openDocumentViewer(mxEvent: MatrixEvent): void {
+function openDocumentViewerInRightPanel(mxEvent: MatrixEvent): void {
     defaultDispatcher.dispatch<OpenDocumentViewerPayload>({
         action: Action.OpenDocumentViewer,
         event: mxEvent,
     });
+}
+
+/**
+ * Leveragers: open the attachment large, over the app, rather than in the narrow right panel.
+ * Loaded on demand, for the same import-cycle reason as above.
+ */
+export function openDocumentViewer(mxEvent: MatrixEvent): void {
+    void Promise.all([import("../Modal"), import("../components/views/dialogs/DocumentViewerDialog")]).then(
+        ([{ default: Modal }, { default: DocumentViewerDialog }]) => {
+            Modal.createDialog(DocumentViewerDialog, { mxEvent }, "mx_DocumentViewerDialog_wrapper");
+        },
+        () => openDocumentViewerInRightPanel(mxEvent),
+    );
+}
+
+/**
+ * Leveragers: open a PDF in the browser's own viewer, in a window of its own, the way Telegram hands
+ * a PDF to the system viewer. Call it from a click: the window opens at once, while the click still
+ * allows it, and the decrypted file is loaded into it once ready.
+ */
+export function openPdfInBrowserWindow(media: DocumentMedia): void {
+    const win = window.open("", "_blank", "popup,width=1000,height=900");
+    media.blob().then(
+        (blob) => {
+            const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+            if (win) win.location.href = url;
+            else window.open(url, "_blank");
+            // The window has read the file by then; a reload after that would fail.
+            window.setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+        },
+        () => win?.close(),
+    );
 }

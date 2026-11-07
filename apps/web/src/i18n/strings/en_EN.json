@@ -931,6 +931,7 @@
     },
     "dialog_close_label": "Close dialog",
     "document_viewer": {
+        "open_in_browser": "Open in a new window",
         "title": "Document"
     },
     "download_completed": "Download Completed",

@@ -1,0 +1,33 @@
+/*
+Copyright 2026 Leveragers.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE files in the repository root for full details.
+*/
+
+/* A document opened from the timeline takes most of the window, like a PDF in Telegram. */
+.mx_DocumentViewerDialog_wrapper {
+    .mx_Dialog_border {
+        max-width: none;
+    }
+
+    .mx_Dialog {
+        padding: var(--cpd-space-4x) var(--cpd-space-6x);
+        overflow: hidden;
+    }
+}
+
+.mx_DocumentViewerDialog {
+    width: min(1200px, calc(100vw - 64px));
+    height: calc(100vh - 64px);
+    display: flex;
+    flex-direction: column;
+}
+
+.mx_DocumentViewerDialog_body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--cpd-space-3x);
+}

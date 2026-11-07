@@ -929,6 +929,9 @@
         "widget_screenshots": "Activer les captures d’écran pour les widgets pris en charge"
     },
     "dialog_close_label": "Fermer la boîte de dialogue",
+    "document_viewer": {
+        "open_in_browser": "Ouvrir dans une nouvelle fenêtre"
+    },
     "download_completed": "Téléchargement terminé",
     "empty_room": "Salon vide",
     "empty_room_was_name": "Salon vide (précédemment %(oldName)s)",
