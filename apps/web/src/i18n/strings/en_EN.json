@@ -2152,6 +2152,7 @@
         "notification_options": "Notification options",
         "section": {
             "chats": "Chats",
+            "direct_messages": "Direct messages",
             "favourites": "Favourites",
             "invites": "Invites",
             "low_priority": "Low Priority"

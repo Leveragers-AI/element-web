@@ -2142,6 +2142,7 @@
         "notification_options": "Paramètres de notifications",
         "section": {
             "chats": "Discussions",
+            "direct_messages": "Messages privés",
             "favourites": "Favoris",
             "invites": "Invitations",
             "low_priority": "Priorité basse"
