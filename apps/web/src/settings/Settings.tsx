@@ -1260,7 +1260,7 @@ export const SETTINGS: Settings = {
         controller: new FallbackIceServerController(),
     },
     "RoomList.preferredSorting": {
-        supportedLevels: [SettingLevel.DEVICE],
+        supportedLevels: [SettingLevel.DEVICE, SettingLevel.CONFIG],
         default: SortingAlgorithm.Recency,
     },
     "RoomList.panelSize": {
