@@ -67,6 +67,10 @@
         {
             "platform": "itunes",
             "url": "https://apps.apple.com/app/vector/id1083446067"
+        },
+        {
+            "platform": "webapp",
+            "url": "manifest.json"
         }
     ]
 }
