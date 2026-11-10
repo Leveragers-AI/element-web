@@ -66,6 +66,7 @@ import { getBlobSafeMimeType } from "../../../utils/blobs";
 import { EMOJI_REGEX } from "../../../HtmlUtils";
 import { attachMentions, attachRelation, attachUrlPreviews } from "../../../utils/messages";
 import { type RoomUploadViewModel, useRoomUploadViewModel } from "../../../viewmodels/room/RoomUploadViewModel";
+import { type ComposerDraft } from "../../../ContentMessages";
 import { type MessageComposerUrlPreviewViewModel } from "../../../viewmodels/composer/MessageComposerUrlPreviewViewModel";
 import { linksIn } from "../../../utils/UrlUtils";
 import { type MessageComposerUrlPreviewSnapshot } from "@element-hq/web-shared-components";
@@ -179,6 +180,7 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
     public componentDidMount(): void {
         window.addEventListener("beforeunload", this.saveStoredEditorState);
         this.dispatcherRef = dis.register(this.onAction);
+        this.props.uploadVm.setComposerDraft(this.composerDraft);
 
         // Restore the draft here rather than in the constructor, as another composer for the same room
         // may be unmounting in this same render (e.g. the right panel timeline when a call ends), and it
@@ -521,6 +523,7 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
 
     public componentWillUnmount(): void {
         dis.unregister(this.dispatcherRef);
+        this.props.uploadVm.setComposerDraft(undefined);
         window.removeEventListener("beforeunload", this.saveStoredEditorState);
         this.saveStoredEditorState();
     }
@@ -532,6 +535,16 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
         }
         return key;
     }
+
+    /** Lets a file sent from this room take the text typed here as its message (see ContentMessages). */
+    private readonly composerDraft: ComposerDraft = {
+        getText: () => textSerialize(this.model),
+        clear: () => {
+            this.model.reset([]);
+            this.editorRef.current?.clearUndoHistory();
+            this.clearStoredEditorState();
+        },
+    };
 
     private clearStoredEditorState(): void {
         localStorage.removeItem(this.editorStateKey);

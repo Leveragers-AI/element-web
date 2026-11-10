@@ -34,7 +34,7 @@ import {
 import type { ComposerApiFileUploadOption } from "@element-hq/element-web-module-api";
 import { useScopedRoomContext } from "../../contexts/ScopedRoomContext";
 import { useMatrixClientContext } from "../../contexts/MatrixClientContext";
-import ContentMessages from "../../ContentMessages";
+import ContentMessages, { type ComposerDraft } from "../../ContentMessages";
 import { TimelineRenderingType } from "../../contexts/RoomContext";
 import { chromeFileInputFix } from "../../utils/BrowserWorkarounds";
 import type { MatrixDispatcher } from "../../dispatcher/dispatcher";
@@ -131,6 +131,13 @@ export class RoomUploadViewModel
         this.threadRelation = threadRelation;
     };
 
+    private composerDraft?: ComposerDraft;
+
+    /** Set by the message composer, so a file sent from here can take the text already typed. */
+    public setComposerDraft = (composerDraft?: ComposerDraft): void => {
+        this.composerDraft = composerDraft;
+    };
+
     public initiateViaInputFiles = async (files: FileList | File[] | null): Promise<void> => {
         if (!this.checkCanUpload()) {
             return;
@@ -146,6 +153,7 @@ export class RoomUploadViewModel
                 this.replyToEvent,
                 this.client,
                 this.timelineRenderingType,
+                this.composerDraft,
             );
         } catch (ex) {
             logger.warn("Failed to handle file upload transfer", ex);
@@ -168,6 +176,7 @@ export class RoomUploadViewModel
                 this.replyToEvent,
                 this.client,
                 this.timelineRenderingType,
+                this.composerDraft,
             );
         } catch (ex) {
             logger.warn("Failed to handle drag and drop data transfer", ex);

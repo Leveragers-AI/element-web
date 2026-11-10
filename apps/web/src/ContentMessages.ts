@@ -408,6 +408,15 @@ export async function uploadFile(
     }
 }
 
+/**
+ * The text already typed in the message composer. It is offered as the message of the first file,
+ * and the composer is emptied once that file is sent with it.
+ */
+export interface ComposerDraft {
+    getText(): string;
+    clear(): void;
+}
+
 export default class ContentMessages {
     private inprogress: RoomUpload[] = [];
     private mediaConfig: IMediaConfig | null = null;
@@ -442,6 +451,7 @@ export default class ContentMessages {
      * @param replyToEvent - The event being replied to, if any.
      * @param matrixClient - The Matrix client to use for sending the files.
      * @param context - The context in which the files are being sent.
+     * @param composerDraft - The text already typed in the composer, offered as the first file's message.
      * @returns A promise that resolves when the files have been sent.
      */
     public async sendContentListToRoom(
@@ -451,6 +461,7 @@ export default class ContentMessages {
         replyToEvent: MatrixEvent | undefined,
         matrixClient: MatrixClient,
         context = TimelineRenderingType.Room,
+        composerDraft?: ComposerDraft,
     ): Promise<void> {
         if (matrixClient.isGuest()) {
             dis.dispatch({ action: "require_registration" });
@@ -501,13 +512,18 @@ export default class ContentMessages {
 
             let caption: string | undefined;
             if (!uploadAll) {
+                // The text already typed in the composer becomes the first file's message, as in WhatsApp.
+                const draftText = i === 0 ? composerDraft?.getText().trim() : undefined;
                 const { finished } = Modal.createDialog(UploadConfirmDialog, {
                     file,
                     currentIndex: i,
                     totalFiles: okFiles.length,
+                    initialCaption: draftText,
                 });
                 const [shouldContinue, shouldUploadAll, typedCaption] = await finished;
                 if (!shouldContinue) break;
+                // The text moved into the dialog: once sent, it must not stay in the composer too.
+                if (draftText) composerDraft?.clear();
                 if (shouldUploadAll) {
                     uploadAll = true;
                 }

@@ -554,6 +554,49 @@ describe("sendContentListToRoom captions", () => {
         expect(calls[1][6]).toBe("");
     });
 
+    it("offers the text typed in the composer as the first file's message, then empties the composer", async () => {
+        const dialogProps: Array<Record<string, unknown>> = [];
+        vi.spyOn(Modal, "createDialog").mockImplementation((component: unknown, props?: unknown) => {
+            if (component === UploadConfirmDialog) {
+                dialogProps.push(props as Record<string, unknown>);
+                return { finished: Promise.resolve([true, false, "Typed in the composer"]) } as any;
+            }
+            return { finished: new Promise(() => {}), close: vi.fn() } as any;
+        });
+        const draft = { getText: vi.fn(() => "  Typed in the composer  "), clear: vi.fn() };
+        const files = [
+            new File(["a"], "a.txt", { type: "text/plain" }),
+            new File(["b"], "b.txt", { type: "text/plain" }),
+        ];
+
+        await contentMessages.sendContentListToRoom(files, roomId, undefined, undefined, client, undefined, draft);
+
+        expect(dialogProps[0].initialCaption).toBe("Typed in the composer");
+        expect(dialogProps[1].initialCaption).toBeUndefined();
+        expect(draft.clear).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the composer text when the dialog is closed", async () => {
+        vi.spyOn(Modal, "createDialog").mockImplementation((component: unknown) => {
+            if (component === UploadConfirmDialog) return { finished: Promise.resolve([false]) } as any;
+            return { finished: new Promise(() => {}), close: vi.fn() } as any;
+        });
+        const draft = { getText: vi.fn(() => "Not sent yet"), clear: vi.fn() };
+
+        await contentMessages.sendContentListToRoom(
+            [new File(["a"], "a.txt", { type: "text/plain" })],
+            roomId,
+            undefined,
+            undefined,
+            client,
+            undefined,
+            draft,
+        );
+
+        expect(draft.clear).not.toHaveBeenCalled();
+        expect(contentMessages.sendContentToRoom).not.toHaveBeenCalled();
+    });
+
     it("puts the message on the shown file only when Upload all is chosen", async () => {
         vi.spyOn(Modal, "createDialog").mockImplementation((component: unknown) => {
             if (component === UploadConfirmDialog) {

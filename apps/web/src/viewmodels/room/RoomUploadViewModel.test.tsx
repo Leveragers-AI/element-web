@@ -162,6 +162,7 @@ describe("RoomUploadViewModel", () => {
                 replyEvent,
                 client,
                 TimelineRenderingType.Thread,
+                undefined,
             );
         });
     });
@@ -224,6 +225,7 @@ describe("RoomUploadViewModel", () => {
                 replyEvent,
                 client,
                 TimelineRenderingType.Thread,
+                undefined,
             );
         });
     });
@@ -262,6 +264,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 client,
                 TimelineRenderingType.Room,
+                undefined,
             );
         });
     });

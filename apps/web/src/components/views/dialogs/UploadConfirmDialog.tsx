@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only OR GPL-3.0-only OR LicenseRef-Element-Com
 Please see LICENSE files in the repository root for full details.
 */
 
-import React, { useCallback, useState, type JSX } from "react";
+import React, { useCallback, useEffect, useRef, useState, type JSX } from "react";
 
 import { _t } from "../../../languageHandler";
 import BaseDialog from "./BaseDialog";
@@ -36,6 +36,8 @@ interface IProps {
      * Empty when the user did not type one.
      */
     onFinished: (uploadConfirmed: boolean, uploadAll?: boolean, caption?: string) => void;
+    /** Text already typed in the composer, shown in the message field when the dialog opens. */
+    initialCaption?: string;
 }
 
 const previewableFormats = ["video", "audio", "image"];
@@ -109,9 +111,16 @@ export default function UploadConfirmDialog({
     currentIndex = 0,
     totalFiles = 1,
     onFinished,
+    initialCaption,
 }: IProps): JSX.Element {
     const vm = useCreateAutoDisposedViewModel(() => new UploadPreviewViewModel(file));
-    const [caption, setCaption] = useState("");
+    const [caption, setCaption] = useState(initialCaption ?? "");
+    const captionRef = useRef<HTMLTextAreaElement>(null);
+    useEffect(() => {
+        // Put the cursor after the text taken from the composer, ready to go on typing.
+        const field = captionRef.current;
+        if (initialCaption && field) field.setSelectionRange(initialCaption.length, initialCaption.length);
+    }, [initialCaption]);
 
     let title: string;
     if (totalFiles > 1 && currentIndex !== undefined) {
@@ -179,6 +188,7 @@ export default function UploadConfirmDialog({
                     autoComplete="off"
                     autoFocus={true}
                     value={caption}
+                    inputRef={captionRef}
                     onChange={(ev) => setCaption(ev.target.value)}
                     onKeyDown={onCaptionKeyDown}
                 />
