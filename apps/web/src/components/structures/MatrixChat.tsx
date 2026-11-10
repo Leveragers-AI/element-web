@@ -125,6 +125,7 @@ import { sanitizeHtmlText } from "../../HtmlUtils";
 import { NotificationLevel } from "../../stores/notifications/NotificationLevel";
 import { type UserTab } from "../views/dialogs/UserTab";
 import { shouldSkipSetupEncryption } from "../../utils/crypto/shouldSkipSetupEncryption";
+import { confirmDeviceWithEscrowedRecoveryKey } from "../../utils/crypto/escrowedRecoveryKey";
 import { Filter } from "../views/dialogs/spotlight/Filter";
 import { SessionLockStolenView } from "./auth/SessionLockStolenView";
 import { ConfirmSessionLockTheftView } from "./auth/ConfirmSessionLockTheftView";
@@ -433,7 +434,13 @@ export default class MatrixChat extends React.PureComponent<IProps, IState> {
             // if the user has previously set up cross-signing, verify this device so we can fetch the
             // private keys.
 
-            this.setStateForNewView({ view: Views.COMPLETE_SECURITY });
+            // Leveragers: when the homeserver holds this account's recovery key, confirm the device with it
+            // instead of asking; otherwise (no endpoint, no key, failure) carry on as usual.
+            if (await confirmDeviceWithEscrowedRecoveryKey(cli)) {
+                void this.onCompleteSecurityE2eSetupFinished();
+            } else {
+                this.setStateForNewView({ view: Views.COMPLETE_SECURITY });
+            }
         } else if (!(await shouldSkipSetupEncryption(cli))) {
             // if cross-signing is not yet set up, do so now if possible.
             InitialCryptoSetupStore.sharedInstance().startInitialCryptoSetup(
