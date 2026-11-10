@@ -35,7 +35,7 @@ export const installScreenCss = `
 .lvgI-brand .lvgI-lockup{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 .lvgI-brand .lvgI-name{font-size:17px;line-height:1.2;color:#fff}
 .lvgI-brand .lvgI-by{font-size:11px;line-height:1.2;font-style:italic;color:#67e8f9}
-.lvgI-brand h2{margin:0;max-width:16ch;color:#fff;font-size:2.25rem;line-height:1.15;text-wrap:balance}
+.lvgI-brand h2{margin:0;max-width:20ch;color:#fff;font-size:1.25rem;line-height:1.3;text-wrap:balance}
 .lvgI-brand .lvgI-pitch p{margin-top:16px;max-width:38ch;font-size:.9375rem;line-height:1.65}
 .lvgI-brand ul{list-style:none;display:grid;gap:10px;font-size:.8125rem}
 .lvgI-brand li{display:flex;align-items:center;gap:10px}
