@@ -28,13 +28,7 @@ export const OPEN_APP_URL = "web+leveragers:open";
 
 const kbd = (sub: string): JSX.Element => <kbd>{sub}</kbd>;
 
-function Icon({
-    name,
-    size = 16,
-}: {
-    name: "shield" | "lock" | "window" | "bell" | "check" | "play";
-    size?: number;
-}): JSX.Element {
+function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check" | "play"; size?: number }): JSX.Element {
     const paths: Record<typeof name, JSX.Element> = {
         shield: (
             <>
@@ -46,18 +40,6 @@ function Icon({
             <>
                 <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </>
-        ),
-        window: (
-            <>
-                <rect x="3" y="4" width="18" height="14" rx="2" />
-                <path d="M8 21h8" />
-            </>
-        ),
-        bell: (
-            <>
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
             </>
         ),
         check: <path d="M20 6 9 17l-5-5" />,
@@ -165,8 +147,10 @@ function AppWindow({
     );
 }
 
-/** Animation du geste à faire (Dock, barre des tâches ou menu Fichier de Safari). Décorative. */
-function Stage({ scene }: { scene: "mac" | "win" | "safari" }): JSX.Element {
+type Scene = "mac" | "win" | "safari" | "intro-mac" | "intro-win";
+
+/** Illustration : mockup du bureau avec l'app dans le Dock (intro) ou animation du geste à faire. Décorative. */
+function Stage({ scene }: { scene: Scene }): JSX.Element {
     const box = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const el = box.current;
@@ -180,7 +164,38 @@ function Stage({ scene }: { scene: "mac" | "win" | "safari" }): JSX.Element {
 
     const brand = "Agents by Leveragers";
     let content: JSX.Element;
-    if (scene === "mac") {
+    if (scene === "intro-mac" || scene === "intro-win") {
+        const app = (
+            <span className="me">
+                <img src={ICON} alt="" />
+                <b className="tip">Agents</b>
+            </span>
+        );
+        content =
+            scene === "intro-mac" ? (
+                <>
+                    <AppWindow title={brand} />
+                    <div className="dock">
+                        <span />
+                        <span />
+                        <span />
+                        {app}
+                        <span />
+                    </div>
+                </>
+            ) : (
+                <>
+                    <AppWindow title={brand} controls style={{ top: 26 }} />
+                    <div className="taskbar">
+                        <span />
+                        <span />
+                        <span />
+                        {app}
+                        <span />
+                    </div>
+                </>
+            );
+    } else if (scene === "mac") {
         content = (
             <>
                 <AppWindow title={brand} />
@@ -347,10 +362,17 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
         }
     };
 
-    // L'animation du Dock ne vient qu'une fois l'app installée : avant, la gauche rassure. Safari ne
-    // dit jamais si l'app est installée : son animation des 2 étapes ne s'affiche qu'à la demande.
-    const scene: "mac" | "win" | "safari" | null =
-        screen === "success" || screen === "installed" ? os : screen === "safari" && showDemo ? "safari" : null;
+    // À droite, au-dessus des consignes : avant installation le mockup du bureau avec l'app dans le
+    // Dock, après installation l'animation du geste pour l'y garder. Safari ne dit jamais si l'app est
+    // installée : son animation des 2 étapes ne s'affiche qu'à la demande.
+    const scene: Scene =
+        screen === "success" || screen === "installed"
+            ? os
+            : screen === "safari"
+              ? showDemo
+                  ? "safari"
+                  : "intro-mac"
+              : `intro-${os}`;
 
     const continueLink = (label: string, onClick: () => void): JSX.Element => (
         <p className="lvgI-more">
@@ -364,8 +386,8 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
     if (screen === "chromium") {
         main = (
             <>
-                <h1 id="lvgI-title">{_t("leveragers_install|title_computer")}</h1>
-                <p className="lvgI-lead">{_t("leveragers_install|perk_no_download")}</p>
+                <h1 id="lvgI-title">{_t("leveragers_install|brand_title")}</h1>
+                <p className="lvgI-lead">{_t("leveragers_install|install_lead")}</p>
                 <div className="lvgI-actions">
                     <button type="button" className="lvgI-btn lvgI-btn-primary" onClick={install} disabled={busy}>
                         {_t("leveragers_install|install_button")}
@@ -424,8 +446,8 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
     } else if (screen === "safari") {
         main = (
             <>
-                <h1 id="lvgI-title">{_t("leveragers_install|safari_title")}</h1>
-                <p className="lvgI-lead">{_t("leveragers_install|perk_no_download")}</p>
+                <h1 id="lvgI-title">{_t("leveragers_install|brand_title")}</h1>
+                <p className="lvgI-lead">{_t("leveragers_install|install_lead")}</p>
                 <ol className="lvgI-steps">
                     <li>
                         <span className="lvgI-n">1</span>
@@ -483,45 +505,25 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
                     </div>
                 </div>
                 <div className="lvgI-pitch">
-                    <h2>{_t("leveragers_install|brand_title")}</h2>
-                    {scene ? (
-                        <Stage key={scene} scene={scene} />
-                    ) : (
-                        <ul className="lvgI-reassure">
-                            <li>
-                                <Icon name="window" size={18} />
-                                {_t("leveragers_install|perk_window")}
-                            </li>
-                            <li>
-                                <Icon name="bell" size={18} />
-                                {_t("leveragers_install|perk_notifications")}
-                            </li>
-                            <li>
-                                <Icon name="shield" size={18} />
-                                {_t("leveragers_install|brand_encrypted")}
-                            </li>
-                            <li>
-                                <Icon name="lock" size={18} />
-                                {_t("leveragers_install|brand_private")}
-                            </li>
-                        </ul>
-                    )}
+                    <h2>{_t("leveragers_install|hero_title")}</h2>
+                    <p>{_t("leveragers_install|brand_pitch")}</p>
                 </div>
-                {scene && (
-                    <ul>
-                        <li>
-                            <Icon name="shield" />
-                            {_t("leveragers_install|brand_encrypted")}
-                        </li>
-                        <li>
-                            <Icon name="lock" />
-                            {_t("leveragers_install|brand_private")}
-                        </li>
-                    </ul>
-                )}
+                <ul>
+                    <li>
+                        <Icon name="shield" />
+                        {_t("leveragers_install|brand_encrypted")}
+                    </li>
+                    <li>
+                        <Icon name="lock" />
+                        {_t("leveragers_install|brand_private")}
+                    </li>
+                </ul>
             </aside>
             <main className="lvgI-main">
-                <section className="lvgI-content">{main}</section>
+                <section className="lvgI-content">
+                    <Stage key={scene} scene={scene} />
+                    {main}
+                </section>
             </main>
         </div>
     );

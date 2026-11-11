@@ -78,9 +78,9 @@ describe("InstallScreen other screens", () => {
 
     it("shows the Safari animation only when asked", () => {
         const { container } = render(<InstallScreen initialCase="safari" os="mac" onContinue={vi.fn()} />);
-        expect(container.querySelector(".lvgI-stage")).toBeNull();
+        expect(container.querySelector(".s-safari")).toBeNull();
         fireEvent.click(screen.getByRole("button", { pressed: false }));
-        expect(container.querySelector(".lvgI-stage")).not.toBeNull();
+        expect(container.querySelector(".s-safari")).not.toBeNull();
     });
 });
 

@@ -35,15 +35,11 @@ export const installScreenCss = `
 .lvgI-brand .lvgI-lockup{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 .lvgI-brand .lvgI-name{font-size:17px;line-height:1.2;color:#fff}
 .lvgI-brand .lvgI-by{font-size:11px;line-height:1.2;font-style:italic;color:#67e8f9}
-.lvgI-brand h2{margin:0;max-width:20ch;color:#fff;font-size:1.25rem;line-height:1.3;text-wrap:balance}
+.lvgI-brand h2{margin:0;max-width:14ch;color:#fff;font-size:clamp(1.875rem,2.6vw,2.25rem);font-weight:700;line-height:1.15;letter-spacing:-.02em;text-wrap:balance}
 .lvgI-brand .lvgI-pitch p{margin-top:16px;max-width:38ch;font-size:.9375rem;line-height:1.65}
 .lvgI-brand ul{list-style:none;display:grid;gap:10px;font-size:.8125rem}
 .lvgI-brand li{display:flex;align-items:center;gap:10px}
 .lvgI-brand li svg{color:var(--cyan);flex:none}
-.lvgI-brand .lvgI-pitch:last-child{margin-block:auto}
-.lvgI-brand .lvgI-reassure{margin-top:28px;gap:16px;font-size:1rem;line-height:1.45;color:#e2e8f0}
-.lvgI-brand .lvgI-reassure li{align-items:flex-start;gap:12px;max-width:34ch}
-.lvgI-brand .lvgI-reassure svg{margin-top:2px}
 
 .lvgI-main{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px}
 .lvgI-content{width:100%;max-width:27rem}
@@ -87,7 +83,7 @@ a.lvgI-btn{text-decoration:none}
 .lvgI-done + h1{margin-top:10px}
 
 /* Scène animée : 480 x 300, mise à l'échelle de sa boîte */
-.lvgI-stage-wrap{width:100%;margin-top:28px}
+.lvgI-stage-wrap{width:100%;margin:0 0 28px}
 .lvgI-stage-box{position:relative;width:100%;aspect-ratio:480/300}
 .lvgI-stage{position:absolute;left:0;top:0;width:480px;height:300px;transform-origin:0 0;transform:scale(var(--s,1));border-radius:14px;overflow:hidden;
   background:linear-gradient(160deg,#28306b 0%,#3b4a8f 55%,#6f7fc0 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.35);font:500 12px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#111}
@@ -170,6 +166,14 @@ a.lvgI-btn{text-decoration:none}
 .lvgI-stage.s-safari .dock .me{animation:lvg-pop 8s infinite}
 @keyframes lvg-pop{0%,62%{opacity:0;transform:scale(.4)}68%,96%{opacity:1;transform:scale(1)}100%{opacity:0}}
 .lvgI-stage.s-safari .badge{left:178px;bottom:62px;animation:lvg-bdg 8s infinite}
+
+/* Mockup d'intro : l'app arrive dans le Dock (ou la barre des tâches), une seule fois */
+.lvgI-stage.s-intro-mac .cursor,.lvgI-stage.s-intro-mac .ring,.lvgI-stage.s-intro-win .cursor,.lvgI-stage.s-intro-win .ring{display:none}
+.lvgI-stage[class*="s-intro"] .me{animation:lvg-intro-pop 600ms 300ms cubic-bezier(.2,.7,.2,1) both}
+.lvgI-stage[class*="s-intro"] .me img{box-shadow:0 0 0 2px rgba(44,248,229,.9),0 6px 16px rgba(0,0,0,.3)}
+.lvgI-stage .tip{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);padding:3px 9px;border-radius:6px;background:rgba(30,30,36,.88);color:#fff;font-size:11px;font-weight:600;white-space:nowrap;animation:lvg-intro-tip 400ms 900ms ease-out both}
+@keyframes lvg-intro-pop{from{opacity:0;transform:translateY(10px) scale(.6)}to{opacity:1;transform:none}}
+@keyframes lvg-intro-tip{from{opacity:0}to{opacity:1}}
 
 @media (prefers-reduced-motion:reduce){
   .lvgI-stage *{animation:none!important}
