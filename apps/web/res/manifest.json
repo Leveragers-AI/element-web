@@ -55,6 +55,11 @@
     ],
     "related_applications": [
         {
+            "platform": "webapp",
+            "url": "manifest.json",
+            "id": "https://agents.leveragers.com/index.html"
+        },
+        {
             "platform": "play",
             "url": "https://play.google.com/store/apps/details?id=im.vector.app",
             "id": "im.vector.app"
@@ -67,10 +72,6 @@
         {
             "platform": "itunes",
             "url": "https://apps.apple.com/app/vector/id1083446067"
-        },
-        {
-            "platform": "webapp",
-            "url": "manifest.json"
         }
     ]
 }
