@@ -23,13 +23,16 @@ type Screen = InstallCase | "success";
 
 const ICON = "vector-icons/120.png";
 
+/** Ouvre l'app installée : le manifest la déclare pour ce type de lien (`protocol_handlers`). */
+export const OPEN_APP_URL = "web+leveragers:open";
+
 const kbd = (sub: string): JSX.Element => <kbd>{sub}</kbd>;
 
 function Icon({
     name,
     size = 16,
 }: {
-    name: "shield" | "lock" | "window" | "bell" | "check";
+    name: "shield" | "lock" | "window" | "bell" | "check" | "play";
     size?: number;
 }): JSX.Element {
     const paths: Record<typeof name, JSX.Element> = {
@@ -58,6 +61,12 @@ function Icon({
             </>
         ),
         check: <path d="M20 6 9 17l-5-5" />,
+        play: (
+            <>
+                <circle cx="12" cy="12" r="10" />
+                <path d="m10 8 6 4-6 4z" />
+            </>
+        ),
     };
     return (
         <svg
@@ -280,26 +289,6 @@ function Stage({ scene }: { scene: "mac" | "win" | "safari" }): JSX.Element {
     );
 }
 
-function KeepStep({ os }: { os: InstallOs }): JSX.Element {
-    return (
-        <li>
-            <span className="lvgI-n">2</span>
-            <div>
-                <strong>
-                    {os === "mac"
-                        ? _t("leveragers_install|keep_title_mac")
-                        : _t("leveragers_install|keep_title_windows")}
-                </strong>
-                <span className="lvgI-d">
-                    {os === "mac"
-                        ? _t("leveragers_install|keep_body_mac", {}, { kbd })
-                        : _t("leveragers_install|keep_body_windows", {}, { kbd })}
-                </span>
-            </div>
-        </li>
-    );
-}
-
 interface Props {
     initialCase: InstallCase;
     os: InstallOs;
@@ -311,7 +300,7 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
     const [busy, setBusy] = useState(false);
     const [noPrompt, setNoPrompt] = useState(false);
     const [copied, setCopied] = useState(false);
-    const host = window.location.host;
+    const [showDemo, setShowDemo] = useState(false);
 
     useEffect(() => {
         // Installée par un autre chemin (icône de la barre d'adresse) pendant que l'écran est ouvert.
@@ -358,68 +347,37 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
         }
     };
 
+    // L'animation du Dock ne vient qu'une fois l'app installée : avant, la gauche rassure. Safari ne
+    // dit jamais si l'app est installée : son animation des 2 étapes ne s'affiche qu'à la demande.
     const scene: "mac" | "win" | "safari" | null =
-        screen === "safari" ? "safari" : screen === "chromium" || screen === "success" ? os : null;
+        screen === "success" || screen === "installed" ? os : screen === "safari" && showDemo ? "safari" : null;
+
+    const continueLink = (label: string, onClick: () => void): JSX.Element => (
+        <p className="lvgI-more">
+            <button type="button" className="lvgI-link" onClick={onClick}>
+                {label}
+            </button>
+        </p>
+    );
 
     let main: JSX.Element;
     if (screen === "chromium") {
         main = (
             <>
                 <h1 id="lvgI-title">{_t("leveragers_install|title_computer")}</h1>
-                <p className="lvgI-lead">
-                    {os === "mac" ? _t("leveragers_install|lead_mac") : _t("leveragers_install|lead_windows")}
-                </p>
-                <ul className="lvgI-perks">
-                    <li>
-                        <span className="lvgI-ic">
-                            <Icon name="window" />
-                        </span>
-                        <span>{_t("leveragers_install|perk_window")}</span>
-                    </li>
-                    <li>
-                        <span className="lvgI-ic">
-                            <Icon name="bell" />
-                        </span>
-                        <span>{_t("leveragers_install|perk_notifications")}</span>
-                    </li>
-                    <li>
-                        <span className="lvgI-ic">
-                            <Icon name="check" />
-                        </span>
-                        <span>{_t("leveragers_install|perk_no_download")}</span>
-                    </li>
-                </ul>
-                <div className="lvgI-howto">
-                    <h3>{_t("leveragers_install|howto_heading")}</h3>
-                    <ol className="lvgI-steps">
-                        <li>
-                            <span className="lvgI-n">1</span>
-                            <div>
-                                <strong>{_t("leveragers_install|install_title")}</strong>
-                                <span className="lvgI-d">{_t("leveragers_install|install_body")}</span>
-                                <button
-                                    type="button"
-                                    className="lvgI-btn lvgI-btn-primary"
-                                    onClick={install}
-                                    disabled={busy}
-                                >
-                                    {_t("leveragers_install|install_button")}
-                                </button>
-                                {noPrompt && (
-                                    <p className="lvgI-hint" role="status">
-                                        {_t("leveragers_install|install_unavailable")}
-                                    </p>
-                                )}
-                            </div>
-                        </li>
-                        <KeepStep os={os} />
-                    </ol>
-                </div>
+                <p className="lvgI-lead">{_t("leveragers_install|perk_no_download")}</p>
                 <div className="lvgI-actions">
-                    <button type="button" className="lvgI-btn lvgI-btn-secondary" onClick={dismiss}>
-                        {_t("leveragers_install|continue_browser")}
+                    <button type="button" className="lvgI-btn lvgI-btn-primary" onClick={install} disabled={busy}>
+                        {_t("leveragers_install|install_button")}
                     </button>
                 </div>
+                <p className="lvgI-note">{_t("leveragers_install|install_body")}</p>
+                {noPrompt && (
+                    <p className="lvgI-hint" role="status">
+                        {_t("leveragers_install|install_unavailable")}
+                    </p>
+                )}
+                {continueLink(_t("leveragers_install|continue_browser"), dismiss)}
             </>
         );
     } else if (screen === "success") {
@@ -441,63 +399,62 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
                         : _t("leveragers_install|success_how_windows", {}, { kbd })}
                 </p>
                 <p className="lvgI-lead">{_t("leveragers_install|success_close_tab")}</p>
-                <div className="lvgI-actions">
-                    <button type="button" className="lvgI-btn lvgI-btn-secondary" onClick={onContinue}>
-                        {_t("leveragers_install|stay_browser")}
-                    </button>
-                </div>
+                {continueLink(_t("leveragers_install|stay_browser"), onContinue)}
             </>
         );
     } else if (screen === "installed") {
         main = (
             <>
                 <h1 id="lvgI-title">{_t("leveragers_install|installed_title")}</h1>
-                <p className="lvgI-lead">
-                    {os === "mac"
-                        ? _t("leveragers_install|installed_body_mac")
-                        : _t("leveragers_install|installed_body_windows")}
-                </p>
+                <p className="lvgI-lead">{_t("leveragers_install|installed_lead")}</p>
                 <div className="lvgI-actions">
-                    <button type="button" className="lvgI-btn lvgI-btn-secondary" onClick={dismiss}>
-                        {_t("leveragers_install|continue_browser")}
-                    </button>
+                    {/* Lien que l'app installée sait ouvrir (`protocol_handlers` du manifest). */}
+                    <a className="lvgI-btn lvgI-btn-primary" href={OPEN_APP_URL}>
+                        {_t("leveragers_install|open_app")}
+                    </a>
                 </div>
+                <p className="lvgI-note">
+                    {os === "mac"
+                        ? _t("leveragers_install|installed_fallback_mac")
+                        : _t("leveragers_install|installed_fallback_windows")}
+                </p>
+                {continueLink(_t("leveragers_install|continue_browser"), dismiss)}
             </>
         );
     } else if (screen === "safari") {
         main = (
             <>
                 <h1 id="lvgI-title">{_t("leveragers_install|safari_title")}</h1>
-                <p className="lvgI-lead">{_t("leveragers_install|safari_lead")}</p>
-                <div className="lvgI-howto">
-                    <h3>{_t("leveragers_install|howto_heading")}</h3>
-                    <ol className="lvgI-steps">
-                        <li>
-                            <span className="lvgI-n">1</span>
-                            <div>
-                                <strong>{_t("leveragers_install|safari_step1_title")}</strong>
-                                <span className="lvgI-d">
-                                    {_t("leveragers_install|safari_step1_body", {}, { kbd })}
-                                </span>
-                            </div>
-                        </li>
-                        <li>
-                            <span className="lvgI-n">2</span>
-                            <div>
-                                <strong>{_t("leveragers_install|safari_step2_title")}</strong>
-                                <span className="lvgI-d">
-                                    {_t("leveragers_install|safari_step2_body", {}, { kbd })}
-                                </span>
-                            </div>
-                        </li>
-                    </ol>
-                </div>
+                <p className="lvgI-lead">{_t("leveragers_install|perk_no_download")}</p>
+                <ol className="lvgI-steps">
+                    <li>
+                        <span className="lvgI-n">1</span>
+                        <div>
+                            <strong>{_t("leveragers_install|safari_step1_title")}</strong>
+                            <span className="lvgI-d">{_t("leveragers_install|safari_step1_body", {}, { kbd })}</span>
+                        </div>
+                    </li>
+                    <li>
+                        <span className="lvgI-n">2</span>
+                        <div>
+                            <strong>{_t("leveragers_install|safari_step2_title")}</strong>
+                            <span className="lvgI-d">{_t("leveragers_install|safari_step2_body", {}, { kbd })}</span>
+                        </div>
+                    </li>
+                </ol>
                 <p className="lvgI-note">{_t("leveragers_install|safari_requirement")}</p>
-                <div className="lvgI-actions">
-                    <button type="button" className="lvgI-btn lvgI-btn-secondary" onClick={dismiss}>
-                        {_t("leveragers_install|continue_browser")}
+                <p className="lvgI-demo">
+                    <button
+                        type="button"
+                        className="lvgI-link"
+                        aria-pressed={showDemo}
+                        onClick={() => setShowDemo((shown) => !shown)}
+                    >
+                        <Icon name="play" size={14} />
+                        {showDemo ? _t("leveragers_install|hide_demo") : _t("leveragers_install|show_demo")}
                     </button>
-                </div>
+                </p>
+                {continueLink(_t("leveragers_install|continue_browser"), dismiss)}
             </>
         );
     } else {
@@ -509,10 +466,8 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
                     <button type="button" className="lvgI-btn lvgI-btn-primary" onClick={copyAddress}>
                         {copied ? _t("leveragers_install|address_copied") : _t("leveragers_install|copy_address")}
                     </button>
-                    <button type="button" className="lvgI-btn lvgI-btn-secondary" onClick={dismiss}>
-                        {_t("leveragers_install|continue_firefox")}
-                    </button>
                 </div>
+                {continueLink(_t("leveragers_install|continue_firefox"), dismiss)}
             </>
         );
     }
@@ -529,27 +484,44 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
                 </div>
                 <div className="lvgI-pitch">
                     <h2>{_t("leveragers_install|brand_title")}</h2>
-                    {scene ? <Stage key={scene} scene={scene} /> : <p>{_t("leveragers_install|brand_pitch")}</p>}
+                    {scene ? (
+                        <Stage key={scene} scene={scene} />
+                    ) : (
+                        <ul className="lvgI-reassure">
+                            <li>
+                                <Icon name="window" size={18} />
+                                {_t("leveragers_install|perk_window")}
+                            </li>
+                            <li>
+                                <Icon name="bell" size={18} />
+                                {_t("leveragers_install|perk_notifications")}
+                            </li>
+                            <li>
+                                <Icon name="shield" size={18} />
+                                {_t("leveragers_install|brand_encrypted")}
+                            </li>
+                            <li>
+                                <Icon name="lock" size={18} />
+                                {_t("leveragers_install|brand_private")}
+                            </li>
+                        </ul>
+                    )}
                 </div>
-                <ul>
-                    <li>
-                        <Icon name="shield" />
-                        {_t("leveragers_install|brand_encrypted")}
-                    </li>
-                    <li>
-                        <Icon name="lock" />
-                        {_t("leveragers_install|brand_private")}
-                    </li>
-                </ul>
+                {scene && (
+                    <ul>
+                        <li>
+                            <Icon name="shield" />
+                            {_t("leveragers_install|brand_encrypted")}
+                        </li>
+                        <li>
+                            <Icon name="lock" />
+                            {_t("leveragers_install|brand_private")}
+                        </li>
+                    </ul>
+                )}
             </aside>
             <main className="lvgI-main">
-                <section className="lvgI-content">
-                    {main}
-                    <p className="lvgI-trust">
-                        <Icon name="lock" size={13} />
-                        {_t("leveragers_install|trust", { host })}
-                    </p>
-                </section>
+                <section className="lvgI-content">{main}</section>
             </main>
         </div>
     );

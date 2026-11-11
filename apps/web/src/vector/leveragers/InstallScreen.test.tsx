@@ -11,7 +11,7 @@ import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "test-utils-rtl";
 
-import { InstallScreen, renderInstallScreen } from "./InstallScreen";
+import { InstallScreen, OPEN_APP_URL, renderInstallScreen } from "./InstallScreen";
 import { clearDeferredPrompt } from "./installScreen";
 
 let failRender = false;
@@ -67,6 +67,20 @@ describe("InstallScreen install button", () => {
         await act(async () => fireEvent.click(installButton()));
         expect(screen.getByRole("status")).toBeInTheDocument();
         expect(installButton()).not.toBeDisabled();
+    });
+});
+
+describe("InstallScreen other screens", () => {
+    it("offers to open the installed app, with a link the app handles", () => {
+        render(<InstallScreen initialCase="installed" os="mac" onContinue={vi.fn()} />);
+        expect(screen.getByRole("link")).toHaveAttribute("href", OPEN_APP_URL);
+    });
+
+    it("shows the Safari animation only when asked", () => {
+        const { container } = render(<InstallScreen initialCase="safari" os="mac" onContinue={vi.fn()} />);
+        expect(container.querySelector(".lvgI-stage")).toBeNull();
+        fireEvent.click(screen.getByRole("button", { pressed: false }));
+        expect(container.querySelector(".lvgI-stage")).not.toBeNull();
     });
 });
 

@@ -73,5 +73,11 @@
             "platform": "itunes",
             "url": "https://apps.apple.com/app/vector/id1083446067"
         }
+    ],
+    "protocol_handlers": [
+        {
+            "protocol": "web+leveragers",
+            "url": "index.html?lvg_open=%s"
+        }
     ]
 }

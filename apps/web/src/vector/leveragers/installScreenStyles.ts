@@ -40,11 +40,15 @@ export const installScreenCss = `
 .lvgI-brand ul{list-style:none;display:grid;gap:10px;font-size:.8125rem}
 .lvgI-brand li{display:flex;align-items:center;gap:10px}
 .lvgI-brand li svg{color:var(--cyan);flex:none}
+.lvgI-brand .lvgI-pitch:last-child{margin-block:auto}
+.lvgI-brand .lvgI-reassure{margin-top:28px;gap:16px;font-size:1rem;line-height:1.45;color:#e2e8f0}
+.lvgI-brand .lvgI-reassure li{align-items:flex-start;gap:12px;max-width:34ch}
+.lvgI-brand .lvgI-reassure svg{margin-top:2px}
 
 .lvgI-main{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px}
 .lvgI-content{width:100%;max-width:27rem}
 .lvgInstall h1{margin:0;font-size:1.625rem;line-height:1.2;text-wrap:balance;color:var(--ink)}
-.lvgI-lead{margin-top:12px!important;color:var(--ink-2);font-size:.9375rem;text-wrap:pretty}
+.lvgI-lead{margin-top:12px!important;margin-bottom:0!important;color:var(--ink-2);font-size:.9375rem;text-wrap:pretty}
 
 .lvgI-perks{list-style:none;margin-top:20px!important;display:grid;gap:8px;font-size:.875rem;color:var(--ink-2)}
 .lvgI-perks li{display:flex;gap:12px;align-items:center}
@@ -53,6 +57,7 @@ export const installScreenCss = `
 .lvgI-howto{margin-top:24px;padding-top:24px;border-top:1px solid var(--line)}
 .lvgI-howto h3{margin:0 0 16px;font:600 .9375rem/1.3 var(--sans);color:var(--ink)}
 .lvgI-steps{list-style:none;display:grid}
+.lvgI-lead + .lvgI-steps{margin-top:24px!important}
 .lvgI-steps li{position:relative;display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start;padding-bottom:20px}
 .lvgI-steps li:last-child{padding-bottom:0}
 .lvgI-steps li:not(:last-child)::before{content:"";position:absolute;left:13.5px;top:36px;bottom:8px;width:1px;background:#c9c8dc}
@@ -70,9 +75,14 @@ export const installScreenCss = `
 .lvgI-btn-secondary{background:var(--soft);color:var(--ink)}
 .lvgI-btn-secondary:hover{background:var(--soft-hover)}
 .lvgI-steps .lvgI-btn{margin-top:12px}
-.lvgI-trust{margin-top:20px!important;display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--ink-2)}
-.lvgI-trust svg{color:var(--ok);flex:none}
-.lvgI-note{margin-top:16px!important;font-size:.75rem;color:var(--ink-3)}
+.lvgI-more{margin-top:20px!important;text-align:center}
+.lvgI-link{background:none;border:0;padding:4px 2px;font-size:.8125rem;font-weight:500;color:var(--ink-3);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.lvgI-link:hover{color:var(--ink)}
+.lvgI-demo{margin-top:12px!important}
+.lvgI-demo .lvgI-link{display:inline-flex;align-items:center;gap:6px;padding-left:0;color:var(--primary);font-weight:600;text-decoration:none}
+.lvgI-demo .lvgI-link:hover{text-decoration:underline}
+a.lvgI-btn{text-decoration:none}
+.lvgI-note{margin-top:12px!important;font-size:.75rem;color:var(--ink-3)}
 .lvgI-done{display:inline-flex;align-items:center;gap:8px;font-size:.8125rem;font-weight:600;color:var(--ok)}
 .lvgI-done + h1{margin-top:10px}
 
