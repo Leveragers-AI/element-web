@@ -80,7 +80,8 @@ export function skipInstallScreen(env: Omit<InstallEnvironment, "isInstalled">):
     // Téléphones et tablettes : rien (Element X). Un iPad récent se présente comme un Mac tactile.
     if (/Android|iPhone|iPad|iPod|Mobile/.test(ua)) return true;
     if (/Macintosh/.test(ua) && env.maxTouchPoints > 1) return true;
-    return false;
+    // The steps are written for macOS and Windows only (Linux, ChromeOS: nothing).
+    return !/Macintosh|Windows/.test(ua);
 }
 
 /**
@@ -95,7 +96,9 @@ export function decideInstallCase(env: InstallEnvironment): InstallCase | null {
     if (env.hasInstallPrompt) return "chromium";
     if (/Firefox\//.test(ua)) return "firefox";
     const isSafari = /Safari\//.test(ua) && !/Chrome\/|Chromium\/|CriOS|Edg\//.test(ua);
-    if (isSafari && /Macintosh/.test(ua)) return "safari";
+    // « Add to Dock » arrived with Safari 17.
+    const safariVersion = Number(/Version\/(\d+)/.exec(ua)?.[1] ?? 0);
+    if (isSafari && /Macintosh/.test(ua) && safariVersion >= 17) return "safari";
     return null;
 }
 
