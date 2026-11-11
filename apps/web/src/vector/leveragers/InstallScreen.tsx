@@ -6,7 +6,8 @@ Please see LICENSE files in the repository root for full details.
 */
 
 import React, { type JSX, StrictMode, useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
+import { logger } from "matrix-js-sdk/src/logger";
 
 import { _t } from "../../languageHandler";
 import { installScreenCss } from "./installScreenStyles";
@@ -556,20 +557,41 @@ export function renderInstallScreen(initialCase: InstallCase, os: InstallOs): Pr
     return new Promise((resolve) => {
         const style = document.createElement("style");
         style.textContent = installScreenCss;
-        document.head.appendChild(style);
         const container = document.createElement("div");
-        document.body.appendChild(container);
-        const root = createRoot(container);
+        let root: Root | undefined;
+        let finished = false;
+        // Safe to call more than once; always hands over to the app, whatever went wrong.
         const done = (): void => {
-            root.unmount();
+            if (finished) return;
+            finished = true;
+            try {
+                root?.unmount();
+            } catch (e) {
+                logger.warn("Install screen: unmount failed", e);
+            }
             container.remove();
             style.remove();
             resolve();
         };
-        root.render(
-            <StrictMode>
-                <InstallScreen initialCase={initialCase} os={os} onContinue={done} />
-            </StrictMode>,
-        );
+        try {
+            document.head.appendChild(style);
+            document.body.appendChild(container);
+            root = createRoot(container, {
+                // A render error would otherwise leave a blank page: React unmounts the tree and
+                // nobody calls `done`. Deferred so the root is not unmounted from inside React.
+                onUncaughtError: (error) => {
+                    logger.warn("Install screen failed, opening the app", error);
+                    setTimeout(done);
+                },
+            });
+            root.render(
+                <StrictMode>
+                    <InstallScreen initialCase={initialCase} os={os} onContinue={done} />
+                </StrictMode>,
+            );
+        } catch (e) {
+            logger.warn("Install screen failed, opening the app", e);
+            done();
+        }
     });
 }

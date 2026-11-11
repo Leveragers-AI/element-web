@@ -5,9 +5,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 Please see LICENSE files in the repository root for full details.
 */
 
-import { describe, it, expect } from "vitest";
+// @vitest-environment happy-dom
 
-import { decideInstallCase, detectOs, type InstallEnvironment } from "./installScreen";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+import {
+    decideInstallCase,
+    detectOs,
+    INSTALLED_LOOKUP_TIMEOUT_MS,
+    type InstallEnvironment,
+    showInstallScreenIfNeeded,
+} from "./installScreen";
+import { renderInstallScreen } from "./InstallScreen";
+import { parseAppUrl } from "../url_utils";
+
+vi.mock("./InstallScreen", () => ({ renderInstallScreen: vi.fn() }));
 
 const CHROME_MAC =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
@@ -74,5 +86,100 @@ describe("detectOs", () => {
     it("tells Mac from Windows", () => {
         expect(detectOs(CHROME_MAC)).toBe("mac");
         expect(detectOs(EDGE_WIN)).toBe("win");
+    });
+});
+
+/** Test helper; the code under test uses `document.cookie` too (no Cookie Store API in Safari/Firefox). */
+function writeCookie(value: string): void {
+    // eslint-disable-next-line unicorn/no-document-cookie
+    document.cookie = value;
+}
+
+describe("showInstallScreenIfNeeded", () => {
+    const COOKIE = "lvg_install_screen_dismissed";
+    const lookup = vi.fn<() => Promise<unknown[]>>();
+    const at = (url: string): ReturnType<typeof parseAppUrl> => parseAppUrl(new URL(url));
+
+    beforeEach(() => {
+        vi.mocked(renderInstallScreen).mockReset().mockResolvedValue(undefined);
+        vi.spyOn(navigator, "userAgent", "get").mockReturnValue(CHROME_MAC);
+        lookup.mockReset().mockResolvedValue([]);
+        Object.defineProperty(navigator, "getInstalledRelatedApps", { value: lookup, configurable: true });
+        Object.defineProperty(window, "onbeforeinstallprompt", { value: null, configurable: true, writable: true });
+        writeCookie(`${COOKIE}=; Max-Age=0; Path=/`);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        delete (navigator as { getInstalledRelatedApps?: unknown }).getInstalledRelatedApps;
+        delete (window as { onbeforeinstallprompt?: unknown }).onbeforeinstallprompt;
+        writeCookie(`${COOKIE}=; Max-Age=0; Path=/`);
+    });
+
+    it.each([
+        "https://agents.leveragers.com/",
+        "https://agents.leveragers.com/#",
+        "https://agents.leveragers.com/index.html",
+    ])("shows the screen at the front door: %s", async (url) => {
+        await showInstallScreenIfNeeded(at(url));
+        expect(renderInstallScreen).toHaveBeenCalledWith("chromium", "mac");
+    });
+
+    it.each([
+        "https://agents.leveragers.com/#/home",
+        "https://agents.leveragers.com/#/login",
+        "https://agents.leveragers.com/#/welcome",
+        "https://agents.leveragers.com/#/room/!abc:chat.leveragers.com",
+        "https://agents.leveragers.com/#/room/#general:chat.leveragers.com",
+        "https://agents.leveragers.com/?loginToken=abc",
+        "https://agents.leveragers.com/#code=abc&state=def",
+        "https://agents.leveragers.com/#/register?client_secret=a&session_id=b&hs_url=c&is_url=d&sid=e",
+    ])("skips the screen, without asking the browser, for %s", async (url) => {
+        await showInstallScreenIfNeeded(at(url));
+        expect(renderInstallScreen).not.toHaveBeenCalled();
+        expect(lookup).not.toHaveBeenCalled();
+    });
+
+    it("does not ask the browser once the screen was dismissed", async () => {
+        writeCookie(`${COOKIE}=1; Path=/`);
+        await showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
+        expect(renderInstallScreen).not.toHaveBeenCalled();
+        expect(lookup).not.toHaveBeenCalled();
+    });
+
+    it("does not ask the browser on a phone", async () => {
+        vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ANDROID_CHROME);
+        await showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
+        expect(lookup).not.toHaveBeenCalled();
+        expect(renderInstallScreen).not.toHaveBeenCalled();
+    });
+
+    it("says the app is installed when the browser says so", async () => {
+        lookup.mockResolvedValue([{ platform: "webapp" }]);
+        await showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
+        expect(renderInstallScreen).toHaveBeenCalledWith("installed", "mac");
+    });
+
+    it("stops waiting for a browser that never answers, as if the app were not installed", async () => {
+        vi.useFakeTimers();
+        lookup.mockReturnValue(new Promise(() => {}));
+        const shown = showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
+        await vi.advanceTimersByTimeAsync(INSTALLED_LOOKUP_TIMEOUT_MS);
+        await shown;
+        expect(renderInstallScreen).toHaveBeenCalledWith("chromium", "mac");
+    });
+
+    it("treats a failing lookup as not installed", async () => {
+        lookup.mockImplementation(() => {
+            throw new Error("not allowed");
+        });
+        await showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
+        expect(renderInstallScreen).toHaveBeenCalledWith("chromium", "mac");
+    });
+
+    it("never rejects when the screen fails, so the app still starts", async () => {
+        vi.mocked(renderInstallScreen).mockRejectedValue(new Error("chunk failed"));
+        await expect(showInstallScreenIfNeeded(at("https://agents.leveragers.com/"))).resolves.toBeUndefined();
     });
 });

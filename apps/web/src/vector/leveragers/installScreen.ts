@@ -63,7 +63,24 @@ export interface InstallEnvironment {
     hasInstallPrompt: boolean;
     /** `null` quand le navigateur ne sait pas le dire (tout sauf Chrome et Edge récents). */
     isInstalled: boolean | null;
+    /** Sign-in return, invitation, or any in-app route (`#/room/…`) in the URL. */
     hasUrlParams: boolean;
+}
+
+/**
+ * The exits that need no browser lookup: true when the screen must not be shown.
+ * Run before `getInstalledRelatedApps()`, which may be slow.
+ */
+export function skipInstallScreen(env: Omit<InstallEnvironment, "isInstalled">): boolean {
+    if (env.isElectron || env.isStandalone || env.isDismissed) return true;
+    // Retour de connexion (SSO), lien d'invitation, lien vers un salon : on ne s'intercale pas.
+    if (env.hasUrlParams) return true;
+
+    const ua = env.userAgent;
+    // Téléphones et tablettes : rien (Element X). Un iPad récent se présente comme un Mac tactile.
+    if (/Android|iPhone|iPad|iPod|Mobile/.test(ua)) return true;
+    if (/Macintosh/.test(ua) && env.maxTouchPoints > 1) return true;
+    return false;
 }
 
 /**
@@ -71,15 +88,9 @@ export interface InstallEnvironment {
  * Fonction pure, testée à part.
  */
 export function decideInstallCase(env: InstallEnvironment): InstallCase | null {
-    if (env.isElectron || env.isStandalone || env.isDismissed) return null;
-    // Retour de connexion (SSO), lien d'invitation : on ne s'intercale pas.
-    if (env.hasUrlParams) return null;
+    if (skipInstallScreen(env)) return null;
 
     const ua = env.userAgent;
-    // Téléphones et tablettes : rien (Element X). Un iPad récent se présente comme un Mac tactile.
-    if (/Android|iPhone|iPad|iPod|Mobile/.test(ua)) return null;
-    if (/Macintosh/.test(ua) && env.maxTouchPoints > 1) return null;
-
     if (env.isInstalled) return "installed";
     if (env.hasInstallPrompt) return "chromium";
     if (/Firefox\//.test(ua)) return "firefox";
@@ -103,14 +114,24 @@ export function rememberDismissal(): void {
     document.cookie = `${DISMISS_COOKIE}=1; Max-Age=315360000; Path=/; SameSite=Lax${secure}`;
 }
 
+/** How long the start of the app may wait for `getInstalledRelatedApps()`. */
+export const INSTALLED_LOOKUP_TIMEOUT_MS = 500;
+
+/** `null` (unknown, treated as not installed) when the browser cannot tell, fails or is too slow. */
 async function readInstalled(): Promise<boolean | null> {
     const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<unknown[]> };
     if (typeof nav.getInstalledRelatedApps !== "function") return null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), INSTALLED_LOOKUP_TIMEOUT_MS);
+    });
     try {
-        const apps = await nav.getInstalledRelatedApps();
-        return apps.length > 0;
+        const lookup = nav.getInstalledRelatedApps().then((apps) => apps.length > 0);
+        return await Promise.race([lookup, timeout]);
     } catch {
         return null;
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -118,21 +139,24 @@ async function readInstalled(): Promise<boolean | null> {
  * Montre l'écran si besoin et rend la main quand la personne choisit de rester dans le
  * navigateur. Ne lève jamais d'erreur : au pire, l'app s'ouvre comme avant.
  */
-export async function showInstallScreenIfNeeded(params: URLParams): Promise<void> {
+export async function showInstallScreenIfNeeded(parsedUrl: { location: string; params: URLParams }): Promise<void> {
     try {
-        const env: InstallEnvironment = {
+        const isDismissed = readDismissed();
+        const cheapEnv = {
             userAgent: navigator.userAgent,
             maxTouchPoints: navigator.maxTouchPoints ?? 0,
             isElectron: Boolean(window.electron),
             isStandalone:
                 window.matchMedia?.("(display-mode: standalone)").matches ||
                 Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
-            isDismissed: readDismissed(),
+            isDismissed,
             // Chrome et Edge exposent l'évènement même s'il n'a pas encore été envoyé.
             hasInstallPrompt: "onbeforeinstallprompt" in window,
-            isInstalled: await readInstalled(),
-            hasUrlParams: Object.keys(params).length > 0,
+            // Only the front door: like upstream's deep-link rule in `index.ts`.
+            hasUrlParams: Object.keys(parsedUrl.params).length > 0 || parsedUrl.location.length > 0,
         };
+        if (skipInstallScreen(cheapEnv)) return;
+        const env: InstallEnvironment = { ...cheapEnv, isInstalled: await readInstalled() };
         const installCase = decideInstallCase(env);
         if (!installCase) return;
 
