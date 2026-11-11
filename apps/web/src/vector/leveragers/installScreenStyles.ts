@@ -74,9 +74,6 @@ export const installScreenCss = `
 .lvgI-more{margin-top:20px!important;text-align:center}
 .lvgI-link{background:none;border:0;padding:4px 2px;font-size:.8125rem;font-weight:500;color:var(--ink-3);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .lvgI-link:hover{color:var(--ink)}
-.lvgI-demo{margin-top:12px!important}
-.lvgI-demo .lvgI-link{display:inline-flex;align-items:center;gap:6px;padding-left:0;color:var(--primary);font-weight:600;text-decoration:none}
-.lvgI-demo .lvgI-link:hover{text-decoration:underline}
 a.lvgI-btn{text-decoration:none}
 .lvgI-note{margin-top:12px!important;font-size:.75rem;color:var(--ink-3)}
 .lvgI-done{display:inline-flex;align-items:center;gap:8px;font-size:.8125rem;font-weight:600;color:var(--ok)}

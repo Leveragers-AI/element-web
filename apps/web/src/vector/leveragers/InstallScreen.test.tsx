@@ -76,10 +76,8 @@ describe("InstallScreen other screens", () => {
         expect(screen.getByRole("link")).toHaveAttribute("href", OPEN_APP_URL);
     });
 
-    it("shows the Safari animation only when asked", () => {
+    it("shows the Safari animation of its 2 steps", () => {
         const { container } = render(<InstallScreen initialCase="safari" os="mac" onContinue={vi.fn()} />);
-        expect(container.querySelector(".s-safari")).toBeNull();
-        fireEvent.click(screen.getByRole("button", { pressed: false }));
         expect(container.querySelector(".s-safari")).not.toBeNull();
     });
 });

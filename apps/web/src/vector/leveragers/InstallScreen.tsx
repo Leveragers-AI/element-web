@@ -28,7 +28,7 @@ export const OPEN_APP_URL = "web+leveragers:open";
 
 const kbd = (sub: string): JSX.Element => <kbd>{sub}</kbd>;
 
-function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check" | "play"; size?: number }): JSX.Element {
+function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check"; size?: number }): JSX.Element {
     const paths: Record<typeof name, JSX.Element> = {
         shield: (
             <>
@@ -43,12 +43,6 @@ function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check" | "play";
             </>
         ),
         check: <path d="M20 6 9 17l-5-5" />,
-        play: (
-            <>
-                <circle cx="12" cy="12" r="10" />
-                <path d="m10 8 6 4-6 4z" />
-            </>
-        ),
     };
     return (
         <svg
@@ -315,7 +309,6 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
     const [busy, setBusy] = useState(false);
     const [noPrompt, setNoPrompt] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [showDemo, setShowDemo] = useState(false);
 
     useEffect(() => {
         // Installée par un autre chemin (icône de la barre d'adresse) pendant que l'écran est ouvert.
@@ -362,17 +355,10 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
         }
     };
 
-    // À droite, sous les consignes : avant installation le mockup du bureau avec l'app dans le
-    // Dock, après installation l'animation du geste pour l'y garder. Safari ne dit jamais si l'app est
-    // installée : son animation des 2 étapes ne s'affiche qu'à la demande.
+    // À droite, sous les consignes : avant installation le mockup du bureau avec l'app dans le Dock,
+    // après installation l'animation du geste pour l'y garder. Safari : l'animation de ses 2 étapes.
     const scene: Scene =
-        screen === "success" || screen === "installed"
-            ? os
-            : screen === "safari"
-              ? showDemo
-                  ? "safari"
-                  : "intro-mac"
-              : `intro-${os}`;
+        screen === "success" || screen === "installed" ? os : screen === "safari" ? "safari" : `intro-${os}`;
 
     const continueLink = (label: string, onClick: () => void): JSX.Element => (
         <p className="lvgI-more">
@@ -466,17 +452,6 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
                 </ol>
                 <p className="lvgI-note">{_t("leveragers_install|safari_requirement")}</p>
                 <p className="lvgI-note">{_t("leveragers_install|safari_prefer_chrome", {}, { kbd })}</p>
-                <p className="lvgI-demo">
-                    <button
-                        type="button"
-                        className="lvgI-link"
-                        aria-pressed={showDemo}
-                        onClick={() => setShowDemo((shown) => !shown)}
-                    >
-                        <Icon name="play" size={14} />
-                        {showDemo ? _t("leveragers_install|hide_demo") : _t("leveragers_install|show_demo")}
-                    </button>
-                </p>
                 {continueLink(_t("leveragers_install|continue_browser"), dismiss)}
             </>
         );
