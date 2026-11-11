@@ -1677,6 +1677,7 @@
         "installed_lead": "Ouvrez-la pour retrouver vos agents dans leur propre fenêtre.",
         "installed_title": "L’application Agents est déjà installée",
         "open_app": "Ouvrir l’application",
+        "safari_prefer_chrome": "Vous ne trouvez pas <kbd>Ajouter au Dock…</kbd> ? Ouvrez plutôt cette adresse dans Chrome : l’installation s’y fait en un clic.",
         "safari_requirement": "Disponible sur macOS Sonoma et les versions plus récentes.",
         "safari_step1_body": "Dans la barre de menus en haut de l’écran, cliquez sur <kbd>Fichier</kbd>.",
         "safari_step1_title": "Menu Fichier",

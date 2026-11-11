@@ -465,6 +465,7 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
                     </li>
                 </ol>
                 <p className="lvgI-note">{_t("leveragers_install|safari_requirement")}</p>
+                <p className="lvgI-note">{_t("leveragers_install|safari_prefer_chrome", {}, { kbd })}</p>
                 <p className="lvgI-demo">
                     <button
                         type="button"
