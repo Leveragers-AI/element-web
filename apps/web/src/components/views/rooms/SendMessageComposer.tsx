@@ -39,7 +39,7 @@ import {
     unescapeMessage,
 } from "../../../editor/serialize";
 import BasicMessageComposer, { REGEX_EMOTICON } from "./BasicMessageComposer";
-import { CommandPartCreator, type Part, type PartCreator, type SerializedPart } from "../../../editor/parts";
+import { CommandPartCreator, PillPart, type Part, type PartCreator, type SerializedPart } from "../../../editor/parts";
 import { findEditableEvent } from "../../../utils/EventUtils";
 import SendHistoryManager from "../../../SendHistoryManager";
 import { CommandCategories } from "../../../slash-commands/SlashCommands";
@@ -66,6 +66,7 @@ import { getBlobSafeMimeType } from "../../../utils/blobs";
 import { EMOJI_REGEX } from "../../../HtmlUtils";
 import { attachMentions, attachRelation, attachUrlPreviews } from "../../../utils/messages";
 import { type RoomUploadViewModel, useRoomUploadViewModel } from "../../../viewmodels/room/RoomUploadViewModel";
+import { type ComposerDraft } from "../../../ContentMessages";
 import { type MessageComposerUrlPreviewViewModel } from "../../../viewmodels/composer/MessageComposerUrlPreviewViewModel";
 import { linksIn } from "../../../utils/UrlUtils";
 import { type MessageComposerUrlPreviewSnapshot } from "@element-hq/web-shared-components";
@@ -179,6 +180,7 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
     public componentDidMount(): void {
         window.addEventListener("beforeunload", this.saveStoredEditorState);
         this.dispatcherRef = dis.register(this.onAction);
+        this.props.uploadVm.setComposerDraft(this.composerDraft);
 
         // Restore the draft here rather than in the constructor, as another composer for the same room
         // may be unmounting in this same render (e.g. the right panel timeline when a call ends), and it
@@ -521,6 +523,7 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
 
     public componentWillUnmount(): void {
         dis.unregister(this.dispatcherRef);
+        this.props.uploadVm.unsetComposerDraft(this.composerDraft);
         window.removeEventListener("beforeunload", this.saveStoredEditorState);
         this.saveStoredEditorState();
     }
@@ -532,6 +535,27 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
         }
         return key;
     }
+
+    /** Lets a file sent from this room take the text typed here as its message (see ContentMessages). */
+    private readonly composerDraft: ComposerDraft = {
+        // Mentions and slash commands only work when sent from here: leave them in the composer.
+        getText: () =>
+            isSlashCommand(this.model) || this.model.parts.some((part) => part instanceof PillPart)
+                ? ""
+                : textSerialize(this.model),
+        clear: () => {
+            const parts = this.model.serializeParts();
+            // Kept in the send history, like a sent message, so Alt+Up finds it if it cannot be put back.
+            this.sendHistoryManager.save(this.model, this.props.replyToEvent);
+            this.model.reset([]);
+            this.editorRef.current?.clearUndoHistory();
+            this.clearStoredEditorState();
+            return () => {
+                // Never into a composer that is gone or that the user has typed in since.
+                if (this.editorRef.current && this.model.isEmpty) this.model.reset(parts);
+            };
+        },
+    };
 
     private clearStoredEditorState(): void {
         localStorage.removeItem(this.editorStateKey);

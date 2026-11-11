@@ -162,7 +162,42 @@ describe("RoomUploadViewModel", () => {
                 replyEvent,
                 client,
                 TimelineRenderingType.Thread,
+                undefined,
             );
+        });
+        it("passes the text of the registered composer until that composer goes away", async () => {
+            sendContentListToRoomSpy.mockResolvedValue(undefined);
+            const vm = new RoomUploadViewModel(
+                room,
+                client,
+                TimelineRenderingType.Room,
+                dis,
+                undefined,
+                undefined,
+                () => {},
+            );
+            const draft = { getText: () => "Typed here", clear: () => () => {} };
+            const files = [{ name: "fake.png", size: 1024, type: "image/png" }] as unknown as FileList;
+            const expectDraft = (expected: unknown): void =>
+                expect(sendContentListToRoomSpy).toHaveBeenLastCalledWith(
+                    files,
+                    room.roomId,
+                    undefined,
+                    undefined,
+                    client,
+                    TimelineRenderingType.Room,
+                    expected,
+                );
+
+            vm.setComposerDraft(draft);
+            // Another composer going away does not take this one's text with it.
+            vm.unsetComposerDraft({ getText: () => "", clear: () => () => {} });
+            await vm.initiateViaInputFiles(files);
+            expectDraft(draft);
+
+            vm.unsetComposerDraft(draft);
+            await vm.initiateViaInputFiles(files);
+            expectDraft(undefined);
         });
     });
 
@@ -224,6 +259,7 @@ describe("RoomUploadViewModel", () => {
                 replyEvent,
                 client,
                 TimelineRenderingType.Thread,
+                undefined,
             );
         });
     });
@@ -262,6 +298,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 client,
                 TimelineRenderingType.Room,
+                undefined,
             );
         });
     });

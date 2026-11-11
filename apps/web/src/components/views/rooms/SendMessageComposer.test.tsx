@@ -10,8 +10,8 @@ Please see LICENSE files in the repository root for full details.
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "test-utils-rtl";
-import { type MatrixClient, MsgType } from "matrix-js-sdk/src/matrix";
+import { act, fireEvent, render, waitFor } from "test-utils-rtl";
+import { type MatrixClient, MsgType, THREAD_RELATION_TYPE } from "matrix-js-sdk/src/matrix";
 import userEvent from "@testing-library/user-event";
 import { createTestClient, mkEvent, mkStubRoom, stubClient, mockPlatformPeg } from "test-utils";
 import { addTextToComposer } from "./__mocks__/composer.ts";
@@ -28,7 +28,8 @@ import { Layout } from "../../../settings/enums/Layout";
 import { doMaybeLocalRoomAction } from "../../../utils/local-room";
 import { ScopedRoomContextProvider } from "../../../contexts/ScopedRoomContext.tsx";
 import { SDKContextClass } from "../../../contexts/SDKContextClass";
-import { RoomUploadContextProvider } from "../../../viewmodels/room/RoomUploadViewModel.tsx";
+import { RoomUploadContextProvider, useRoomUploadViewModel } from "../../../viewmodels/room/RoomUploadViewModel.tsx";
+import ContentMessages, { type ComposerDraft } from "../../../ContentMessages";
 import { MessageComposerUrlPreviewViewModel } from "../../../viewmodels/composer/MessageComposerUrlPreviewViewModel.ts";
 import { SDKContext } from "../../../contexts/SDKContext.ts";
 import { UrlPreviewApi } from "../../../modules/UrlPreviewApi.ts";
@@ -466,6 +467,147 @@ describe("<SendMessageComposer/>", () => {
             );
 
             expect(defaultDispatcher.dispatch).not.toHaveBeenCalledWith({ action: `effects.confetti` });
+        });
+
+        describe("text offered to a file sent from the composer", () => {
+            const sendContentList = vi.spyOn(ContentMessages.sharedInstance(), "sendContentListToRoom");
+            const wrapper = ({ children }: { children: React.ReactNode }) => (
+                <SDKContext.Provider value={SDKContextClass.instance}>{children}</SDKContext.Provider>
+            );
+            const paste = (textbox: Element, text: string, files: File[] = []) =>
+                act(() => {
+                    fireEvent.paste(textbox, {
+                        clipboardData: {
+                            types: files.length ? ["Files"] : [],
+                            files,
+                            getData: (type: string) => (type === "text/plain" ? text : undefined),
+                        },
+                    });
+                });
+            // Pasting a file is one of the ways to send one: it hands the composer's text to the upload.
+            const pasteFile = (textbox: Element): ComposerDraft | undefined => {
+                paste(textbox, "", [new File(["a"], "a.txt", { type: "text/plain" })]);
+                return sendContentList.mock.lastCall?.[6];
+            };
+            const textbox = (container: HTMLElement) => container.querySelector('[role="textbox"]')!;
+
+            beforeEach(() => {
+                sessionStorage.clear();
+                sendContentList.mockReset().mockResolvedValue(undefined);
+            });
+
+            it("gives its text, empties itself, and puts the text back if the file is not sent", () => {
+                const { container } = getComponent();
+                addTextToComposer(container, "Summarise this");
+                window.dispatchEvent(new Event("beforeunload")); // the draft is now stored
+
+                const draft = pasteFile(textbox(container))!;
+                expect(draft.getText()).toBe("Summarise this");
+
+                let restore!: () => void;
+                act(() => {
+                    restore = draft.clear();
+                });
+                expect(container.textContent).toBe("");
+                expect(localStorage.getItem("mx_cider_state_myfakeroom")).toBeNull();
+                expect(JSON.parse(sessionStorage.getItem("mx_cider_history_myfakeroom[0]")!)).toStrictEqual({
+                    parts: [{ type: "plain", text: "Summarise this" }],
+                });
+
+                act(() => restore());
+                expect(container.textContent).toBe("Summarise this");
+            });
+
+            it("does not put the text back over text typed since, nor into a composer that is gone", () => {
+                const { container, unmount } = getComponent();
+                addTextToComposer(container, "First");
+                let draft = pasteFile(textbox(container))!;
+                let restore!: () => void;
+                act(() => {
+                    restore = draft.clear();
+                });
+                addTextToComposer(container, "Second");
+                act(() => restore());
+                expect(container.textContent).toBe("Second");
+
+                draft = pasteFile(textbox(container))!;
+                act(() => {
+                    restore = draft.clear();
+                });
+                unmount();
+                restore();
+                expect(getComponent().container.textContent).toBe("");
+                // Still reachable from the send history.
+                expect(sessionStorage.getItem("mx_cider_history_myfakeroom[1]")).toContain("Second");
+            });
+
+            it.each([
+                [
+                    "a mention",
+                    [
+                        { type: "user-pill", text: "Paul", resourceId: "@paul:server" },
+                        { type: "plain", text: " can you check?" },
+                    ],
+                ],
+                ["a slash command", [{ type: "plain", text: "/shrug ok" }]],
+            ])("keeps %s in the composer", (_, parts) => {
+                localStorage.setItem("mx_cider_state_myfakeroom", JSON.stringify({ parts }));
+                const { container } = getComponent();
+                expect(container.textContent).not.toBe("");
+
+                expect(pasteFile(textbox(container))!.getText()).toBe("");
+            });
+
+            it("gives the text of the thread composer to a file sent from the thread", () => {
+                const { container } = render(
+                    <>
+                        {getRawComponent()}
+                        {getRawComponent(
+                            { relation: { rel_type: THREAD_RELATION_TYPE.name, event_id: "$thread" } },
+                            { ...defaultRoomContext, timelineRenderingType: TimelineRenderingType.Thread },
+                        )}
+                    </>,
+                    { wrapper },
+                );
+                const [main, thread] = container.querySelectorAll('[role="textbox"]');
+                paste(main, "In the room");
+                paste(thread, "In the thread");
+
+                const draft = pasteFile(thread);
+                expect(sendContentList.mock.lastCall![5]).toBe(TimelineRenderingType.Thread);
+                expect(draft!.getText()).toBe("In the thread");
+            });
+
+            it("forgets its text when it goes away, but not the text of a composer still there", async () => {
+                let uploadVm!: ReturnType<typeof useRoomUploadViewModel>;
+                const Probe = (): null => {
+                    uploadVm = useRoomUploadViewModel();
+                    return null;
+                };
+                const tree = (keys: string[]) => (
+                    <MatrixClientContext.Provider value={mockClient}>
+                        <ScopedRoomContextProvider room={mockRoom} {...defaultRoomContext}>
+                            <RoomUploadContextProvider>
+                                <Probe />
+                                {keys.map((key) => (
+                                    <SendMessageComposer key={key} {...defaultProps} urlPreviewVm={urlPreviewVm} />
+                                ))}
+                            </RoomUploadContextProvider>
+                        </ScopedRoomContextProvider>
+                    </MatrixClientContext.Provider>
+                );
+                const file = new File(["a"], "a.txt", { type: "text/plain" });
+                const { container, rerender } = render(tree(["old", "new"]), { wrapper });
+
+                rerender(tree(["new"]));
+                addTextToComposer(container, "Still here");
+                await uploadVm.initiateViaInputFiles([file]);
+                expect(sendContentList.mock.lastCall![6]!.getText()).toBe("Still here");
+
+                rerender(tree([]));
+                await uploadVm.initiateViaInputFiles([file]);
+                expect(sendContentList.mock.lastCall![6]).toBeUndefined();
+            });
         });
     });
 

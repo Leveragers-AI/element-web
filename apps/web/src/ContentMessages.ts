@@ -408,6 +408,17 @@ export async function uploadFile(
     }
 }
 
+/**
+ * The text already typed in the message composer. It is offered as the message of the first file,
+ * and the composer is emptied when the user confirms that file with a message.
+ */
+export interface ComposerDraft {
+    /** The text to offer, or "" when it must stay in the composer (mentions, slash commands). */
+    getText(): string;
+    /** Empties the composer. The returned function puts the text back if that file is not sent. */
+    clear(): () => void;
+}
+
 export default class ContentMessages {
     private inprogress: RoomUpload[] = [];
     private mediaConfig: IMediaConfig | null = null;
@@ -442,6 +453,7 @@ export default class ContentMessages {
      * @param replyToEvent - The event being replied to, if any.
      * @param matrixClient - The Matrix client to use for sending the files.
      * @param context - The context in which the files are being sent.
+     * @param composerDraft - The text already typed in the composer, offered as the first file's message.
      * @returns A promise that resolves when the files have been sent.
      */
     public async sendContentListToRoom(
@@ -451,6 +463,7 @@ export default class ContentMessages {
         replyToEvent: MatrixEvent | undefined,
         matrixClient: MatrixClient,
         context = TimelineRenderingType.Room,
+        composerDraft?: ComposerDraft,
     ): Promise<void> {
         if (matrixClient.isGuest()) {
             dis.dispatch({ action: "require_registration" });
@@ -500,14 +513,20 @@ export default class ContentMessages {
             const loopPromiseBefore = promBefore;
 
             let caption: string | undefined;
+            let onFailed: (() => void) | undefined;
             if (!uploadAll) {
+                // The text already typed in the composer becomes the first file's message, as in WhatsApp.
+                const draftText = i === 0 ? composerDraft?.getText().trim() : undefined;
                 const { finished } = Modal.createDialog(UploadConfirmDialog, {
                     file,
                     currentIndex: i,
                     totalFiles: okFiles.length,
+                    initialCaption: draftText,
                 });
                 const [shouldContinue, shouldUploadAll, typedCaption] = await finished;
                 if (!shouldContinue) break;
+                // The text goes with the file: empty the composer, and refill it if the upload fails.
+                if (draftText && typedCaption?.trim()) onFailed = composerDraft?.clear();
                 if (shouldUploadAll) {
                     uploadAll = true;
                 }
@@ -526,6 +545,7 @@ export default class ContentMessages {
                         replyToEvent ?? undefined,
                         loopPromiseBefore,
                         caption,
+                        onFailed,
                     ),
                 matrixClient,
             );
@@ -595,6 +615,7 @@ export default class ContentMessages {
         replyToEvent: MatrixEvent | undefined,
         promBefore?: Promise<any>,
         caption?: string,
+        onFailed?: () => void,
     ): Promise<void> {
         const fileName = file.name || _t("common|attachment");
         const content: Omit<MediaEventContent, "info"> & { info: Partial<MediaEventInfo> } = {
@@ -697,6 +718,7 @@ export default class ContentMessages {
             dis.dispatch<UploadFinishedPayload>({ action: Action.UploadFinished, upload });
             dis.dispatch({ action: "message_sent" });
         } catch (error) {
+            onFailed?.(); // failed or cancelled
             // Unwrap UploadFailedError to get the underlying error
             const unwrappedError = error instanceof UploadFailedError && error.cause ? error.cause : error;
 
