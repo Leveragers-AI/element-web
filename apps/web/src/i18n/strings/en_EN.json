@@ -1676,7 +1676,7 @@
         "install_body": "Click the button, then “Install” in the window that opens.",
         "install_button": "Install the app",
         "install_title": "Install the app",
-        "install_unavailable": "Your browser is not offering the installation yet. Use the install icon on the right of the address bar.",
+        "install_unavailable": "Your browser is not offering the installation here. To install the app yourself: click the install icon on the right of the address bar, or open the browser menu (⋮ or …) and choose the option to install this page as an app. If the app is already installed, the same icon opens it.",
         "installed_body_mac": "Open it from the Dock or Launchpad, or with the “Open in app” icon on the right of the address bar.",
         "installed_body_windows": "Open it from the Start menu or the taskbar, or with the “Open in app” icon on the right of the address bar.",
         "installed_title": "The Agents app is already installed",

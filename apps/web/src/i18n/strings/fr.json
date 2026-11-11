@@ -1670,7 +1670,7 @@
         "install_body": "Cliquez sur le bouton, puis sur « Installer » dans la fenêtre qui s’ouvre.",
         "install_button": "Installer l’application",
         "install_title": "Installez l’application",
-        "install_unavailable": "Votre navigateur ne propose pas encore l’installation. Utilisez l’icône d’installation à droite de la barre d’adresse.",
+        "install_unavailable": "Votre navigateur ne propose pas l’installation ici. Pour installer l’application vous-même : cliquez sur l’icône d’installation à droite de la barre d’adresse, ou ouvrez le menu du navigateur (⋮ ou …) et choisissez l’option pour installer cette page comme application. Si l’application est déjà installée, cette même icône l’ouvre.",
         "installed_body_mac": "Ouvrez-la depuis le Dock ou le Launchpad, ou avec l’icône « Ouvrir dans l’application » à droite de la barre d’adresse.",
         "installed_body_windows": "Ouvrez-la depuis le menu Démarrer ou la barre des tâches, ou avec l’icône « Ouvrir dans l’application » à droite de la barre d’adresse.",
         "installed_title": "L’application Agents est déjà installée",

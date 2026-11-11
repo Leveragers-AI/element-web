@@ -322,6 +322,8 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
 
     const install = async (): Promise<void> => {
         const prompt = getDeferredPrompt();
+        // No install offer from the browser (private window, policy, already installed…):
+        // the button shows how to install by hand instead of doing nothing.
         if (!prompt) {
             setNoPrompt(true);
             return;
@@ -333,6 +335,10 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
             // La fenêtre de Chrome ne s'ouvre qu'une fois par évènement.
             clearDeferredPrompt();
             if (outcome === "accepted") setScreen("success");
+        } catch (e) {
+            logger.warn("Install prompt failed", e);
+            clearDeferredPrompt();
+            setNoPrompt(true);
         } finally {
             setBusy(false);
         }

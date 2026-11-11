@@ -45,6 +45,13 @@ describe("InstallScreen install button", () => {
         failRender = false;
     });
 
+    it("shows how to install by hand when the browser offers no install", () => {
+        render(<InstallScreen initialCase="chromium" os="win" onContinue={vi.fn()} />);
+        expect(screen.queryByRole("status")).toBeNull();
+        fireEvent.click(installButton());
+        expect(screen.getByRole("status")).toBeInTheDocument();
+    });
+
     it("opens the browser's install window when it is offered", async () => {
         const prompt = vi.fn().mockResolvedValue(undefined);
         offerInstall(prompt);
@@ -52,6 +59,14 @@ describe("InstallScreen install button", () => {
         await act(async () => fireEvent.click(installButton()));
         expect(prompt).toHaveBeenCalled();
         expect(screen.queryByRole("status")).toBeNull();
+    });
+
+    it("falls back to the manual steps when the install window fails", async () => {
+        offerInstall(vi.fn().mockRejectedValue(new Error("already shown")));
+        render(<InstallScreen initialCase="chromium" os="mac" onContinue={vi.fn()} />);
+        await act(async () => fireEvent.click(installButton()));
+        expect(screen.getByRole("status")).toBeInTheDocument();
+        expect(installButton()).not.toBeDisabled();
     });
 });
 
