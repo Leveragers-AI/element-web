@@ -1341,7 +1341,7 @@ describe("RoomListViewModel", () => {
                 // Without a People section, the Chats section holds the direct messages too
                 { tag: CHATS_TAG, showPeopleSection: false, title: "Chats" },
                 { tag: CHATS_TAG, showPeopleSection: true, title: "Rooms" },
-                { tag: DefaultTagID.DM, showPeopleSection: true, title: "People" },
+                { tag: DefaultTagID.DM, showPeopleSection: true, title: "Direct messages" },
             ])(
                 'should title the $tag section header "$title" when showPeopleSection is $showPeopleSection',
                 ({ tag, showPeopleSection, title }) => {
