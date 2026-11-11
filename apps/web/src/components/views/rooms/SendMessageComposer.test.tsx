@@ -541,6 +541,23 @@ describe("<SendMessageComposer/>", () => {
                 expect(sessionStorage.getItem("mx_cider_history_myfakeroom[1]")).toContain("Second");
             });
 
+            it.each([
+                [
+                    "a mention",
+                    [
+                        { type: "user-pill", text: "Paul", resourceId: "@paul:server" },
+                        { type: "plain", text: " can you check?" },
+                    ],
+                ],
+                ["a slash command", [{ type: "plain", text: "/shrug ok" }]],
+            ])("keeps %s in the composer", (_, parts) => {
+                localStorage.setItem("mx_cider_state_myfakeroom", JSON.stringify({ parts }));
+                const { container } = getComponent();
+                expect(container.textContent).not.toBe("");
+
+                expect(pasteFile(textbox(container))!.getText()).toBe("");
+            });
+
             it("gives the text of the thread composer to a file sent from the thread", () => {
                 const { container } = render(
                     <>

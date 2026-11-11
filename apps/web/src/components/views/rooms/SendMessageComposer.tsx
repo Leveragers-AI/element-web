@@ -39,7 +39,7 @@ import {
     unescapeMessage,
 } from "../../../editor/serialize";
 import BasicMessageComposer, { REGEX_EMOTICON } from "./BasicMessageComposer";
-import { CommandPartCreator, type Part, type PartCreator, type SerializedPart } from "../../../editor/parts";
+import { CommandPartCreator, PillPart, type Part, type PartCreator, type SerializedPart } from "../../../editor/parts";
 import { findEditableEvent } from "../../../utils/EventUtils";
 import SendHistoryManager from "../../../SendHistoryManager";
 import { CommandCategories } from "../../../slash-commands/SlashCommands";
@@ -538,7 +538,11 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
 
     /** Lets a file sent from this room take the text typed here as its message (see ContentMessages). */
     private readonly composerDraft: ComposerDraft = {
-        getText: () => textSerialize(this.model),
+        // Mentions and slash commands only work when sent from here: leave them in the composer.
+        getText: () =>
+            isSlashCommand(this.model) || this.model.parts.some((part) => part instanceof PillPart)
+                ? ""
+                : textSerialize(this.model),
         clear: () => {
             const parts = this.model.serializeParts();
             // Kept in the send history, like a sent message, so Alt+Up finds it if it cannot be put back.
