@@ -141,11 +141,19 @@ describe("showInstallScreenIfNeeded", () => {
         expect(lookup).not.toHaveBeenCalled();
     });
 
-    it("does not ask the browser once the screen was dismissed", async () => {
+    it("does not ask the browser once the screen was dismissed, and refreshes the cookie", async () => {
         writeCookie(`${COOKIE}=1; Path=/`);
+        const setCookie = vi.spyOn(document, "cookie", "set");
         await showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
         expect(renderInstallScreen).not.toHaveBeenCalled();
         expect(lookup).not.toHaveBeenCalled();
+        expect(setCookie).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${COOKIE}=1; Max-Age=\\d+; Path=/`)));
+    });
+
+    it("writes no cookie when the screen was never dismissed", async () => {
+        const setCookie = vi.spyOn(document, "cookie", "set");
+        await showInstallScreenIfNeeded(at("https://agents.leveragers.com/"));
+        expect(setCookie).not.toHaveBeenCalled();
     });
 
     it("does not ask the browser on a phone", async () => {

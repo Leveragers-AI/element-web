@@ -142,6 +142,8 @@ async function readInstalled(): Promise<boolean | null> {
 export async function showInstallScreenIfNeeded(parsedUrl: { location: string; params: URLParams }): Promise<void> {
     try {
         const isDismissed = readDismissed();
+        // Rewritten on every start: Safari keeps a cookie written by script for 7 days at most.
+        if (isDismissed) rememberDismissal();
         const cheapEnv = {
             userAgent: navigator.userAgent,
             maxTouchPoints: navigator.maxTouchPoints ?? 0,
