@@ -1,0 +1,99 @@
+/*
+Copyright 2026 Leveragers.
+
+SPDX-License-Identifier: AGPL-3.0-only
+Please see LICENSE files in the repository root for full details.
+*/
+
+// @vitest-environment happy-dom
+
+import React from "react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "test-utils-rtl";
+
+import { InstallScreen, renderInstallScreen } from "./InstallScreen";
+import { clearDeferredPrompt } from "./installScreen";
+
+let failRender = false;
+
+vi.mock("../../languageHandler", async (importOriginal) => {
+    const original = await importOriginal<typeof import("../../languageHandler")>();
+    return {
+        ...original,
+        _t: ((...args: Parameters<typeof original._t>) => {
+            if (failRender) throw new Error("render failure");
+            return original._t(...args);
+        }) as typeof original._t,
+    };
+});
+
+/** Chrome's install event, as captured by `installScreen.ts`. */
+function offerInstall(prompt: () => Promise<void>, outcome: "accepted" | "dismissed" = "accepted"): void {
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    Object.assign(event, { prompt, userChoice: Promise.resolve({ outcome }) });
+    window.dispatchEvent(event);
+}
+
+function installButton(): HTMLElement {
+    // The first button of the Chrome/Edge screen is the install button.
+    return screen.getAllByRole("button")[0];
+}
+
+describe("InstallScreen install button", () => {
+    afterEach(() => {
+        clearDeferredPrompt();
+        failRender = false;
+    });
+
+    it("shows how to install by hand when the browser offers no install", () => {
+        render(<InstallScreen initialCase="chromium" os="win" onContinue={vi.fn()} />);
+        expect(screen.queryByRole("status")).toBeNull();
+        fireEvent.click(installButton());
+        expect(screen.getByRole("status")).toBeInTheDocument();
+    });
+
+    it("opens the browser's install window when it is offered", async () => {
+        const prompt = vi.fn().mockResolvedValue(undefined);
+        offerInstall(prompt);
+        render(<InstallScreen initialCase="chromium" os="mac" onContinue={vi.fn()} />);
+        await act(async () => fireEvent.click(installButton()));
+        expect(prompt).toHaveBeenCalled();
+        expect(screen.queryByRole("status")).toBeNull();
+    });
+
+    it("falls back to the manual steps when the install window fails", async () => {
+        offerInstall(vi.fn().mockRejectedValue(new Error("already shown")));
+        render(<InstallScreen initialCase="chromium" os="mac" onContinue={vi.fn()} />);
+        await act(async () => fireEvent.click(installButton()));
+        expect(screen.getByRole("status")).toBeInTheDocument();
+        expect(installButton()).not.toBeDisabled();
+    });
+});
+
+describe("renderInstallScreen", () => {
+    afterEach(() => {
+        failRender = false;
+    });
+
+    it("hands over to the app when the person continues, and cleans up", async () => {
+        const before = document.body.childElementCount;
+        const shown = renderInstallScreen("firefox", "win");
+        const buttons = await screen.findAllByRole("button");
+        // Last button: « Continue in Firefox ». Clicking twice must not break anything.
+        act(() => {
+            fireEvent.click(buttons[buttons.length - 1]);
+            fireEvent.click(buttons[buttons.length - 1]);
+        });
+        await expect(shown).resolves.toBeUndefined();
+        expect(document.body.childElementCount).toBe(before);
+    });
+
+    it("hands over to the app when the screen fails to render", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        failRender = true;
+        const before = document.body.childElementCount;
+        const shown = renderInstallScreen("chromium", "win");
+        await waitFor(() => expect(document.body.childElementCount).toBe(before));
+        await expect(shown).resolves.toBeUndefined();
+    });
+});

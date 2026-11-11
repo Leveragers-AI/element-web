@@ -15,6 +15,7 @@ import { shouldPolyfill as shouldPolyFillIntlSegmenter } from "@formatjs/intl-se
 
 // These are things that can run before the skin loads - be careful not to reference the react-sdk though.
 import { parseAppUrl } from "./url_utils";
+import { showInstallScreenIfNeeded } from "./leveragers/installScreen";
 import "./modernizr.cjs";
 import { polyfillTouchEvent } from "../@types/polyfill";
 
@@ -230,6 +231,7 @@ async function start(): Promise<void> {
 
         // Finally, load the app. All of the other react-sdk imports are in this file which causes the skinner to
         // run on the components.
+        await settled(showInstallScreenIfNeeded(parsedUrl));
         await loadApp(parsedUrl.params);
     } catch (err) {
         logger.error(err);
