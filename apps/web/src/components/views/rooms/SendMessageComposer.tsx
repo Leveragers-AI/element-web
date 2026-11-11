@@ -523,7 +523,7 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
 
     public componentWillUnmount(): void {
         dis.unregister(this.dispatcherRef);
-        this.props.uploadVm.setComposerDraft(undefined);
+        this.props.uploadVm.unsetComposerDraft(this.composerDraft);
         window.removeEventListener("beforeunload", this.saveStoredEditorState);
         this.saveStoredEditorState();
     }

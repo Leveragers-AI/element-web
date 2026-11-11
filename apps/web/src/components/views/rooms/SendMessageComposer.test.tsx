@@ -28,7 +28,7 @@ import { Layout } from "../../../settings/enums/Layout";
 import { doMaybeLocalRoomAction } from "../../../utils/local-room";
 import { ScopedRoomContextProvider } from "../../../contexts/ScopedRoomContext.tsx";
 import { SDKContextClass } from "../../../contexts/SDKContextClass";
-import { RoomUploadContextProvider } from "../../../viewmodels/room/RoomUploadViewModel.tsx";
+import { RoomUploadContextProvider, useRoomUploadViewModel } from "../../../viewmodels/room/RoomUploadViewModel.tsx";
 import ContentMessages, { type ComposerDraft } from "../../../ContentMessages";
 import { MessageComposerUrlPreviewViewModel } from "../../../viewmodels/composer/MessageComposerUrlPreviewViewModel.ts";
 import { SDKContext } from "../../../contexts/SDKContext.ts";
@@ -576,6 +576,37 @@ describe("<SendMessageComposer/>", () => {
                 const draft = pasteFile(thread);
                 expect(sendContentList.mock.lastCall![5]).toBe(TimelineRenderingType.Thread);
                 expect(draft!.getText()).toBe("In the thread");
+            });
+
+            it("forgets its text when it goes away, but not the text of a composer still there", async () => {
+                let uploadVm!: ReturnType<typeof useRoomUploadViewModel>;
+                const Probe = (): null => {
+                    uploadVm = useRoomUploadViewModel();
+                    return null;
+                };
+                const tree = (keys: string[]) => (
+                    <MatrixClientContext.Provider value={mockClient}>
+                        <ScopedRoomContextProvider room={mockRoom} {...defaultRoomContext}>
+                            <RoomUploadContextProvider>
+                                <Probe />
+                                {keys.map((key) => (
+                                    <SendMessageComposer key={key} {...defaultProps} urlPreviewVm={urlPreviewVm} />
+                                ))}
+                            </RoomUploadContextProvider>
+                        </ScopedRoomContextProvider>
+                    </MatrixClientContext.Provider>
+                );
+                const file = new File(["a"], "a.txt", { type: "text/plain" });
+                const { container, rerender } = render(tree(["old", "new"]), { wrapper });
+
+                rerender(tree(["new"]));
+                addTextToComposer(container, "Still here");
+                await uploadVm.initiateViaInputFiles([file]);
+                expect(sendContentList.mock.lastCall![6]!.getText()).toBe("Still here");
+
+                rerender(tree([]));
+                await uploadVm.initiateViaInputFiles([file]);
+                expect(sendContentList.mock.lastCall![6]).toBeUndefined();
             });
         });
     });

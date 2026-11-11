@@ -138,6 +138,11 @@ export class RoomUploadViewModel
         this.composerDraft = composerDraft;
     };
 
+    /** Called by a composer that goes away: forgets its text unless another composer has registered since. */
+    public unsetComposerDraft = (composerDraft: ComposerDraft): void => {
+        if (this.composerDraft === composerDraft) this.composerDraft = undefined;
+    };
+
     public initiateViaInputFiles = async (files: FileList | File[] | null): Promise<void> => {
         if (!this.checkCanUpload()) {
             return;
