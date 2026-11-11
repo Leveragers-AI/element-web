@@ -361,6 +361,27 @@ describe("ContentMessages", () => {
             );
             dialogSpy.mockRestore();
         });
+
+        it.each([
+            ["sent", true, false],
+            ["not sent", false, true],
+        ])("calls onFailed only when the file is %s", async (_, uploads, failed) => {
+            if (uploads) vi.mocked(client.uploadContent).mockResolvedValue({ content_uri: "mxc://server/file" });
+            else vi.mocked(client.uploadContent).mockRejectedValue(new Error("network down"));
+            const onFailed = vi.fn();
+            const file = new File([], "report.pdf", { type: "application/pdf" });
+            await contentMessages.sendContentToRoom(
+                file,
+                roomId,
+                undefined,
+                client,
+                undefined,
+                undefined,
+                "Hi",
+                onFailed,
+            );
+            expect(onFailed).toHaveBeenCalledTimes(failed ? 1 : 0);
+        });
     });
 
     describe("getCurrentUploads", () => {
@@ -419,6 +440,27 @@ describe("ContentMessages", () => {
             expect(abortController!.signal.aborted).toBeTruthy();
             deferred.resolve({} as UploadResponse);
             await prom;
+        });
+
+        it("should call onFailed when the upload is cancelled", async () => {
+            const deferred = Promise.withResolvers<UploadResponse>();
+            vi.mocked(client.uploadContent).mockReturnValue(deferred.promise);
+            const onFailed = vi.fn();
+            const prom = contentMessages.sendContentToRoom(
+                new File([], "file1"),
+                roomId,
+                undefined,
+                client,
+                undefined,
+                undefined,
+                "Hi",
+                onFailed,
+            );
+            await flushPromises();
+            contentMessages.cancelUpload(contentMessages.getCurrentUploads()[0]);
+            deferred.resolve({} as UploadResponse);
+            await prom;
+            expect(onFailed).toHaveBeenCalledTimes(1);
         });
     });
 });
@@ -563,7 +605,8 @@ describe("sendContentListToRoom captions", () => {
             }
             return { finished: new Promise(() => {}), close: vi.fn() } as any;
         });
-        const draft = { getText: vi.fn(() => "  Typed in the composer  "), clear: vi.fn() };
+        const restore = vi.fn();
+        const draft = { getText: vi.fn(() => "  Typed in the composer  "), clear: vi.fn(() => restore) };
         const files = [
             new File(["a"], "a.txt", { type: "text/plain" }),
             new File(["b"], "b.txt", { type: "text/plain" }),
@@ -574,6 +617,26 @@ describe("sendContentListToRoom captions", () => {
         expect(dialogProps[0].initialCaption).toBe("Typed in the composer");
         expect(dialogProps[1].initialCaption).toBeUndefined();
         expect(draft.clear).toHaveBeenCalledTimes(1);
+        // Only the upload of the file carrying the text can put it back in the composer.
+        const calls = vi.mocked(contentMessages.sendContentToRoom).mock.calls;
+        expect(calls[0][7]).toBe(restore);
+        expect(calls[1][7]).toBeUndefined();
+    });
+
+    it("leaves the composer text alone when the message is emptied in the dialog", async () => {
+        vi.spyOn(Modal, "createDialog").mockImplementation((component: unknown) => {
+            if (component === UploadConfirmDialog) return { finished: Promise.resolve([true, false, ""]) } as any;
+            return { finished: new Promise(() => {}), close: vi.fn() } as any;
+        });
+        const draft = { getText: vi.fn(() => "Ask this afterwards"), clear: vi.fn(() => vi.fn()) };
+        const file = new File(["a"], "a.txt", { type: "text/plain" });
+
+        await contentMessages.sendContentListToRoom([file], roomId, undefined, undefined, client, undefined, draft);
+
+        expect(draft.clear).not.toHaveBeenCalled();
+        const calls = vi.mocked(contentMessages.sendContentToRoom).mock.calls;
+        expect(calls[0][6]).toBe("");
+        expect(calls[0][7]).toBeUndefined();
     });
 
     it("keeps the composer text when the dialog is closed", async () => {

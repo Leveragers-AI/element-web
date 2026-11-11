@@ -540,9 +540,16 @@ export class SendMessageComposer extends React.Component<ISendMessageComposerPro
     private readonly composerDraft: ComposerDraft = {
         getText: () => textSerialize(this.model),
         clear: () => {
+            const parts = this.model.serializeParts();
+            // Kept in the send history, like a sent message, so Alt+Up finds it if it cannot be put back.
+            this.sendHistoryManager.save(this.model, this.props.replyToEvent);
             this.model.reset([]);
             this.editorRef.current?.clearUndoHistory();
             this.clearStoredEditorState();
+            return () => {
+                // Never into a composer that is gone or that the user has typed in since.
+                if (this.editorRef.current && this.model.isEmpty) this.model.reset(parts);
+            };
         },
     };
 

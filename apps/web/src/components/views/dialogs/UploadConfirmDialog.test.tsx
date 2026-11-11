@@ -153,6 +153,21 @@ describe("<UploadConfirmDialog />", () => {
             expect(onFinished).toHaveBeenCalledWith(true, false, "First line\nSecond line");
         });
 
+        it("starts with the text already typed in the composer, ready to go on typing", async () => {
+            const onFinished = vi.fn();
+            const { getByRole } = render(
+                <UploadConfirmDialog file={file} onFinished={onFinished} initialCaption="From the composer" />,
+            );
+            const field = getByRole("textbox", { name: "Add a message" });
+
+            expect(field).toHaveValue("From the composer");
+            expect((field as HTMLTextAreaElement).selectionStart).toBe("From the composer".length);
+            await userEvent.type(field, ", and more");
+            await userEvent.click(getByRole("button", { name: "Upload" }));
+
+            expect(onFinished).toHaveBeenCalledWith(true, false, "From the composer, and more");
+        });
+
         it("gives the typed message with Upload all", async () => {
             const onFinished = vi.fn();
             const { getByRole } = render(
