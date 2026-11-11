@@ -362,7 +362,7 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
         }
     };
 
-    // À droite, au-dessus des consignes : avant installation le mockup du bureau avec l'app dans le
+    // À droite, sous les consignes : avant installation le mockup du bureau avec l'app dans le
     // Dock, après installation l'animation du geste pour l'y garder. Safari ne dit jamais si l'app est
     // installée : son animation des 2 étapes ne s'affiche qu'à la demande.
     const scene: Scene =
@@ -521,8 +521,8 @@ export function InstallScreen({ initialCase, os, onContinue }: Props): JSX.Eleme
             </aside>
             <main className="lvgI-main">
                 <section className="lvgI-content">
-                    <Stage key={scene} scene={scene} />
                     {main}
+                    <Stage key={scene} scene={scene} />
                 </section>
             </main>
         </div>

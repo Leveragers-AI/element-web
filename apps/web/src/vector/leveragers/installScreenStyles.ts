@@ -83,7 +83,7 @@ a.lvgI-btn{text-decoration:none}
 .lvgI-done + h1{margin-top:10px}
 
 /* Scène animée : 480 x 300, mise à l'échelle de sa boîte */
-.lvgI-stage-wrap{width:100%;margin:0 0 28px}
+.lvgI-stage-wrap{width:100%;margin-top:32px}
 .lvgI-stage-box{position:relative;width:100%;aspect-ratio:480/300}
 .lvgI-stage{position:absolute;left:0;top:0;width:480px;height:300px;transform-origin:0 0;transform:scale(var(--s,1));border-radius:14px;overflow:hidden;
   background:linear-gradient(160deg,#28306b 0%,#3b4a8f 55%,#6f7fc0 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.35);font:500 12px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:#111}
