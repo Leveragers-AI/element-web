@@ -2,7 +2,7 @@
     "name": "Agents by Leveragers",
     "short_name": "Agents",
     "display": "standalone",
-    "theme_color": "#0A082B",
+    "theme_color": "#FAF8F4",
     "start_url": "index.html",
     "icons": [
         {
