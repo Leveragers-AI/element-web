@@ -74,6 +74,8 @@ describe("pickFirstRoom", () => {
 });
 
 describe("viewFirstRoomOrHome", () => {
+    let setActiveSpace: ReturnType<typeof vi.spyOn>;
+
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -87,6 +89,7 @@ describe("viewFirstRoomOrHome", () => {
         vi.spyOn(spaceStore, "isRoomInSpace").mockReturnValue(true);
         vi.spyOn(DMRoomMap, "shared").mockReturnValue({ getUserIdForRoomId: () => undefined } as unknown as DMRoomMap);
         vi.spyOn(SDKContextClass.instance.roomViewStore, "getRoomId").mockReturnValue(null);
+        setActiveSpace = vi.spyOn(spaceStore, "setActiveSpace").mockImplementation(() => {});
         return vi.spyOn(dis, "dispatch").mockImplementation(() => {});
     }
 
@@ -96,6 +99,13 @@ describe("viewFirstRoomOrHome", () => {
         expect(dispatch).toHaveBeenCalledWith(
             expect.objectContaining({ action: Action.ViewRoom, room_id: "!general" }),
         );
+    });
+
+    it("selects the space before opening the room, so a private chat does not leave Element's Home selected", async () => {
+        const dispatch = setUp({ spaces: [SPACE], rooms: [fakeRoom("!agent-dm")] });
+        await viewFirstRoomOrHome();
+        expect(setActiveSpace).toHaveBeenCalledWith(SPACE, false);
+        expect(setActiveSpace.mock.invocationCallOrder[0]).toBeLessThan(dispatch.mock.invocationCallOrder[0]);
     });
 
     it("waits for the room list to load", async () => {
@@ -114,6 +124,7 @@ describe("viewFirstRoomOrHome", () => {
         const dispatch = setUp({ spaces: [], rooms: [fakeRoom("!general")] });
         await viewFirstRoomOrHome();
         expect(dispatch).toHaveBeenCalledWith({ action: Action.ViewHomePage });
+        expect(setActiveSpace).not.toHaveBeenCalled();
     });
 
     it("leaves alone a room the person opened meanwhile", async () => {

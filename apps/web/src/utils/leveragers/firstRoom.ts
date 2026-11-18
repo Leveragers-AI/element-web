@@ -62,15 +62,16 @@ function roomListLoaded(): Promise<boolean> {
     });
 }
 
-async function findFirstRoom(): Promise<Room | undefined> {
+async function findFirstRoom(): Promise<{ space: Room; room: Room } | undefined> {
     // The room list loads after the first sync, once the spaces are known.
     if (!(await roomListLoaded())) return undefined;
     const space = SDKContextClass.instance.spaceStore.spacePanelSpaces[0];
     if (!space) return undefined;
-    return pickFirstRoom(RoomListStoreV3.instance.getSortedRooms(), space.roomId, {
+    const room = pickFirstRoom(RoomListStoreV3.instance.getSortedRooms(), space.roomId, {
         isInSpace: (spaceId, roomId) => SDKContextClass.instance.spaceStore.isRoomInSpace(spaceId, roomId),
         isDm: (roomId) => !!DMRoomMap.shared()?.getUserIdForRoomId(roomId),
     });
+    return room ? { space, room } : undefined;
 }
 
 /**
@@ -78,17 +79,24 @@ async function findFirstRoom(): Promise<Room | undefined> {
  * before when there is none. Never throws.
  */
 export async function viewFirstRoomOrHome(): Promise<void> {
-    let room: Room | undefined;
+    let found: { space: Room; room: Room } | undefined;
     try {
-        room = await findFirstRoom();
+        found = await findFirstRoom();
     } catch (e) {
         logger.warn("Could not pick the first room", e);
     }
     // The person opened something else while the list was loading: leave it.
     if (SDKContextClass.instance.roomViewStore.getRoomId()) return;
-    if (room) {
-        logger.debug(`opening ${room.roomId}`);
-        dis.dispatch<ViewRoomPayload>({ action: Action.ViewRoom, room_id: room.roomId, metricsTrigger: undefined });
+    if (found) {
+        logger.debug(`opening ${found.room.roomId} in ${found.space.roomId}`);
+        // Select the space first: a private chat also belongs to Element's Home (hidden on our build), which would
+        // otherwise stay selected, with no space highlighted in the bar.
+        SDKContextClass.instance.spaceStore.setActiveSpace(found.space.roomId, false);
+        dis.dispatch<ViewRoomPayload>({
+            action: Action.ViewRoom,
+            room_id: found.room.roomId,
+            metricsTrigger: undefined,
+        });
     } else {
         dis.dispatch({ action: Action.ViewHomePage });
     }
