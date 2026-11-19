@@ -32,7 +32,8 @@ import { createReconnectedListener } from "../../utils/connection";
 import { DecryptError, DownloadError } from "../../utils/DecryptFile";
 import { BLURHASH_FIELD, createThumbnail } from "../../utils/image-media";
 import { isMimeTypeAllowed } from "../../utils/blobs";
-import ImageView from "../../components/views/elements/ImageView";
+import type ImageView from "../../components/views/elements/ImageView";
+import ImageGalleryView from "../../components/views/leveragers/ImageGalleryView";
 
 export interface ImageBodyViewModelProps {
     /**
@@ -499,7 +500,8 @@ export class ImageBodyViewModel
             };
         }
 
-        Modal.createDialog(ImageView, params, "mx_Dialog_lightbox", undefined, true);
+        // Leveragers: the lightbox with previous / next between the images of the room.
+        Modal.createDialog(ImageGalleryView, params, "mx_Dialog_lightbox", undefined, true);
     }
 
     public onLinkClick = (event: MouseEvent<HTMLAnchorElement>): void => {
