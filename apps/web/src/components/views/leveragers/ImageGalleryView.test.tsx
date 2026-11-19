@@ -77,6 +77,34 @@ describe("<ImageGalleryView />", () => {
         expect(screen.queryByRole("button", { name: "Previous image" })).toBeNull();
     });
 
+    it("leaves the arrow keys to a dialog opened above the lightbox, and to text fields", async () => {
+        render(
+            <ImageGalleryView src="http://this.is.a.url/example.com/second" mxEvent={second} onFinished={vi.fn()} />,
+        );
+        const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Forward, View source…: Element shows them above the lightbox, which stays mounted underneath.
+        const above = document.createElement("div");
+        above.className = "mx_Dialog_wrapper mx_Dialog_wrapperWithStaticUnder";
+        const search = document.createElement("button");
+        above.appendChild(search);
+        document.body.appendChild(above);
+        fireEvent.keyDown(search, { key: "ArrowLeft" });
+        await settle();
+        expect(shown()).toBe("http://this.is.a.url/example.com/second");
+        above.remove();
+
+        const field = document.createElement("input");
+        document.body.appendChild(field);
+        fireEvent.keyDown(field, { key: "ArrowRight" });
+        await settle();
+        expect(shown()).toBe("http://this.is.a.url/example.com/second");
+        field.remove();
+
+        fireEvent.keyDown(document.body, { key: "ArrowRight" });
+        await waitFor(() => expect(shown()).toBe("http://this.is.a.url/example.com/third"));
+    });
+
     it("leaves the other keys to Element", () => {
         const onFinished = vi.fn();
         render(

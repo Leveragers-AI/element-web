@@ -57,7 +57,7 @@ function mockSettings(mediaPreviews: MediaPreviewValue, overrides: Record<string
         if (name === "mediaPreviewConfig") return { media_previews: mediaPreviews };
         if (name === "showMediaEventIds") return overrides;
         return undefined;
-    }) as typeof SettingsStore.getValue);
+    }) as unknown as typeof SettingsStore.getValue);
 }
 
 describe("isGalleryImage", () => {

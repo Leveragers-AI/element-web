@@ -68,6 +68,19 @@ function viewProps(event: MatrixEvent, src: string, base: ImageViewProps): Image
     };
 }
 
+/**
+ * Whether an arrow key belongs to something else than the lightbox: a dialog opened from it (Forward, View source…),
+ * which Element shows above the lightbox while the lightbox stays mounted, or a text field.
+ */
+function keyBelongsElsewhere(ev: KeyboardEvent): boolean {
+    if (document.querySelector(".mx_Dialog_wrapperWithStaticUnder")) return true;
+    const target = ev.target;
+    return (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+    );
+}
+
 const buttonStyle = (side: "left" | "right"): React.CSSProperties => ({
     position: "fixed",
     top: "calc(50% + var(--image-view-panel-height) / 2)",
@@ -124,6 +137,7 @@ export default function ImageGalleryView(props: ImageViewProps): JSX.Element {
         const onKeyDown = (ev: KeyboardEvent): void => {
             if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
             if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+            if (keyBelongsElsewhere(ev)) return;
             ev.preventDefault();
             ev.stopPropagation();
             go(ev.key === "ArrowLeft" ? -1 : 1);
