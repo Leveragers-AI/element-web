@@ -77,7 +77,22 @@ describe("MessageComposerButtons", () => {
             false,
         );
 
-        expect(getButtonLabels()).toEqual(["Emoji", "Attachment", "More options"]);
+        expect(getButtonLabels()).toEqual(["Emoji", "Attachment", "Voice Message", "More options"]);
+    });
+
+    it("Renders no menu in wide mode when only the voice message would be in it", () => {
+        wrapAndRender(
+            <MessageComposerButtons
+                {...mockProps}
+                isMenuOpen={false}
+                showLocationButton={false}
+                showPollsButton={false}
+                showStickersButton={false}
+            />,
+            false,
+        );
+
+        expect(getButtonLabels()).toEqual(["Emoji", "Attachment", "Voice Message"]);
     });
 
     it("Renders other buttons in menu in wide mode", async () => {
@@ -98,8 +113,9 @@ describe("MessageComposerButtons", () => {
             expect(getButtonLabels()).toEqual([
                 "Emoji",
                 "Attachment",
+                "Voice Message",
                 "More options",
-                ["Sticker", "Voice Message", "Poll", "Location"],
+                ["Sticker", "Poll", "Location"],
             ]);
         });
     });

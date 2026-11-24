@@ -115,10 +115,11 @@ const MessageComposerButtons: React.FC<IProps> = (props: IProps) => {
                 emojiButton(props)
             ),
             <UploadButton key="upload" vm={roomUploadVM} />,
+            // Leveragers: voice message always visible in the bar, not in the "..." menu.
+            voiceRecordingButton(props, narrow),
         ];
         moreButtons = [
             showStickersButton(props),
-            voiceRecordingButton(props, narrow),
             props.showPollsButton ? pollButton(room, props.relation) : null,
             showLocationButton(props, room, matrixClient),
         ];
