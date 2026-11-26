@@ -13,7 +13,7 @@ import {
 } from "../../components/views/dialogs/CreateSectionDialog/types";
 import { _t } from "../../i18n";
 import { type RoomListStoreV3Class } from "../../stores/room-list-v3/RoomListStoreV3";
-import { type MatrixClient, type Room } from "matrix-js-sdk/src/matrix";
+import { type MatrixClient, type Room, KnownMembership } from "matrix-js-sdk/src/matrix";
 import throttle from "lodash/throttle";
 import RoomAvatar from "../../components/views/avatars/RoomAvatar";
 import { logger } from "matrix-js-sdk/src/logger";
@@ -144,7 +144,12 @@ export class CreateSectionDialogViewModel
      */
     private loadRooms(): void {
         // Get the rooms from the store
-        const rooms = this.props.roomListStore.getRooms();
+        // Leveragers: only the rooms the user is in or invited to. The store also holds the rooms they left,
+        // which the room list hides but this picker used to offer.
+        const rooms = this.props.roomListStore.getRooms().filter((r) => {
+            const membership = r.getMyMembership();
+            return membership === KnownMembership.Join || membership === KnownMembership.Invite;
+        });
 
         const tag = this.props.sectionToEdit?.tag;
         // If we're editing an existing section, preselect the rooms that are already in it.

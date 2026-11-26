@@ -8,7 +8,7 @@
 // @vitest-environment happy-dom
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { type MatrixClient, type Room } from "matrix-js-sdk/src/matrix";
+import { type MatrixClient, type Room, KnownMembership } from "matrix-js-sdk/src/matrix";
 import { createTestClient, mkStubRoom } from "test-utils";
 
 import { CreateSectionDialogViewModel } from "./CreateSectionDialogViewModel";
@@ -100,6 +100,14 @@ describe("CreateSectionDialogViewModel", () => {
                 "First room",
             ]);
             expect(vm.getSnapshot().selectedRooms).toEqual([]);
+        });
+
+        it("should not offer the rooms the user has left", () => {
+            vi.mocked(rooms[2].getMyMembership).mockReturnValue(KnownMembership.Leave);
+            vi.mocked(rooms[0].getMyMembership).mockReturnValue(KnownMembership.Invite);
+            const vm = createViewModelOnRoomStep();
+
+            expect(vm.getSnapshot().rooms.map((room) => room.name)).toEqual(["Second room", "First room"]);
         });
 
         it("should report the selected rooms as rooms to tag when submitted", () => {
