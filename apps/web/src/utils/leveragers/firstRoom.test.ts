@@ -8,14 +8,15 @@ Please see LICENSE files in the repository root for full details.
 // @vitest-environment happy-dom
 
 import { vi, describe, it, expect, afterEach } from "vitest";
-import { type Room, KnownMembership } from "matrix-js-sdk/src/matrix";
+import { type MatrixClient, type Room, KnownMembership } from "matrix-js-sdk/src/matrix";
 
 import dis from "../../dispatcher/dispatcher";
 import { Action } from "../../dispatcher/actions";
 import RoomListStoreV3, { LISTS_LOADED_EVENT } from "../../stores/room-list-v3/RoomListStoreV3";
 import { SDKContextClass } from "../../contexts/SDKContextClass";
 import DMRoomMap from "../DMRoomMap";
-import { pickFirstRoom, viewFirstRoomOrHome } from "./firstRoom";
+import { MatrixClientPeg } from "../../MatrixClientPeg";
+import { pickFirstRoom, redirectSpaceHome, viewFirstRoomOrHome } from "./firstRoom";
 
 const SPACE = "!space:example.com";
 
@@ -131,6 +132,64 @@ describe("viewFirstRoomOrHome", () => {
         const dispatch = setUp({ spaces: [SPACE], rooms: [fakeRoom("!general")] });
         vi.spyOn(SDKContextClass.instance.roomViewStore, "getRoomId").mockReturnValue("!clicked");
         await viewFirstRoomOrHome();
+        expect(dispatch).not.toHaveBeenCalled();
+    });
+});
+
+describe("redirectSpaceHome", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function setUp(target: Room | null, rooms: Room[]) {
+        vi.spyOn(MatrixClientPeg, "get").mockReturnValue({ getRoom: () => target } as unknown as MatrixClient);
+        const store = RoomListStoreV3.instance;
+        vi.spyOn(store, "isLoadingRooms", "get").mockReturnValue(false);
+        vi.spyOn(store, "getSortedRooms").mockReturnValue(rooms);
+        const spaceStore = SDKContextClass.instance.spaceStore;
+        vi.spyOn(spaceStore, "isRoomInSpace").mockReturnValue(true);
+        vi.spyOn(DMRoomMap, "shared").mockReturnValue({ getUserIdForRoomId: () => undefined } as unknown as DMRoomMap);
+        const setActiveSpace = vi.spyOn(spaceStore, "setActiveSpace").mockImplementation(() => {});
+        const dispatch = vi.spyOn(dis, "dispatch").mockImplementation(() => {});
+        return { setActiveSpace, dispatch, viewSpace: vi.fn() };
+    }
+
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const viewSpaceHome = { action: Action.ViewRoom, room_id: SPACE, metricsTrigger: undefined } as const;
+
+    it("opens the first room of a joined space instead of its home page", async () => {
+        const space = fakeRoom(SPACE, KnownMembership.Join, true);
+        const { setActiveSpace, dispatch, viewSpace } = setUp(space, [fakeRoom("!general")]);
+        expect(redirectSpaceHome(viewSpaceHome, viewSpace)).toBe(true);
+        await flush();
+        expect(setActiveSpace).toHaveBeenCalledWith(SPACE, false);
+        expect(dispatch).toHaveBeenCalledWith(
+            expect.objectContaining({ action: Action.ViewRoom, room_id: "!general" }),
+        );
+        expect(viewSpace).not.toHaveBeenCalled();
+    });
+
+    it("keeps the page of a space the person is only invited to", () => {
+        const { dispatch, viewSpace } = setUp(fakeRoom(SPACE, KnownMembership.Invite, true), [fakeRoom("!general")]);
+        expect(redirectSpaceHome(viewSpaceHome, viewSpace)).toBe(false);
+        expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it("keeps the developer-mode timeline of a space", () => {
+        const { viewSpace } = setUp(fakeRoom(SPACE, KnownMembership.Join, true), [fakeRoom("!general")]);
+        expect(redirectSpaceHome({ ...viewSpaceHome, forceTimeline: true }, viewSpace)).toBe(false);
+    });
+
+    it("leaves an ordinary room alone", () => {
+        const { viewSpace } = setUp(fakeRoom("!general"), []);
+        expect(redirectSpaceHome({ ...viewSpaceHome, room_id: "!general" }, viewSpace)).toBe(false);
+    });
+
+    it("shows the page as before when the space has no room", async () => {
+        const { dispatch, viewSpace } = setUp(fakeRoom(SPACE, KnownMembership.Join, true), []);
+        expect(redirectSpaceHome(viewSpaceHome, viewSpace)).toBe(true);
+        await flush();
+        expect(viewSpace).toHaveBeenCalled();
         expect(dispatch).not.toHaveBeenCalled();
     });
 });

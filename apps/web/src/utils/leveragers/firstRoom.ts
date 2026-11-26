@@ -14,10 +14,11 @@ import { type ViewRoomPayload } from "../../dispatcher/payloads/ViewRoomPayload"
 import RoomListStoreV3, { LISTS_LOADED_EVENT } from "../../stores/room-list-v3/RoomListStoreV3";
 import DMRoomMap from "../DMRoomMap";
 import { SDKContextClass } from "../../contexts/SDKContextClass";
+import { MatrixClientPeg } from "../../MatrixClientPeg";
 
 // Leveragers: on a device that has no "last room" yet (first sign-in), open the first room of the user's first
 // space instead of Element's home page. No room or space name is written here: the order is the one shown in the
-// space bar and in the room list.
+// space bar and in the room list. The same rule replaces the home page of a space (redirectSpaceHome).
 
 const logger = rootLogger.getChild("FirstRoom:");
 
@@ -62,16 +63,31 @@ function roomListLoaded(): Promise<boolean> {
     });
 }
 
+function firstRoomOfSpace(spaceId: string): Room | undefined {
+    return pickFirstRoom(RoomListStoreV3.instance.getSortedRooms(), spaceId, {
+        isInSpace: (spaceId, roomId) => SDKContextClass.instance.spaceStore.isRoomInSpace(spaceId, roomId),
+        isDm: (roomId) => !!DMRoomMap.shared()?.getUserIdForRoomId(roomId),
+    });
+}
+
 async function findFirstRoom(): Promise<{ space: Room; room: Room } | undefined> {
     // The room list loads after the first sync, once the spaces are known.
     if (!(await roomListLoaded())) return undefined;
     const space = SDKContextClass.instance.spaceStore.spacePanelSpaces[0];
     if (!space) return undefined;
-    const room = pickFirstRoom(RoomListStoreV3.instance.getSortedRooms(), space.roomId, {
-        isInSpace: (spaceId, roomId) => SDKContextClass.instance.spaceStore.isRoomInSpace(spaceId, roomId),
-        isDm: (roomId) => !!DMRoomMap.shared()?.getUserIdForRoomId(roomId),
-    });
+    const room = firstRoomOfSpace(space.roomId);
     return room ? { space, room } : undefined;
+}
+
+function viewRoomInSpace(spaceId: string, roomId: string): void {
+    // Select the space first: a private chat also belongs to Element's Home (hidden on our build), which would
+    // otherwise stay selected, with no space highlighted in the bar.
+    SDKContextClass.instance.spaceStore.setActiveSpace(spaceId, false);
+    dis.dispatch<ViewRoomPayload>({
+        action: Action.ViewRoom,
+        room_id: roomId,
+        metricsTrigger: undefined,
+    });
 }
 
 /**
@@ -89,15 +105,36 @@ export async function viewFirstRoomOrHome(): Promise<void> {
     if (SDKContextClass.instance.roomViewStore.getRoomId()) return;
     if (found) {
         logger.debug(`opening ${found.room.roomId} in ${found.space.roomId}`);
-        // Select the space first: a private chat also belongs to Element's Home (hidden on our build), which would
-        // otherwise stay selected, with no space highlighted in the bar.
-        SDKContextClass.instance.spaceStore.setActiveSpace(found.space.roomId, false);
-        dis.dispatch<ViewRoomPayload>({
-            action: Action.ViewRoom,
-            room_id: found.room.roomId,
-            metricsTrigger: undefined,
-        });
+        viewRoomInSpace(found.space.roomId, found.room.roomId);
     } else {
         dis.dispatch({ action: Action.ViewHomePage });
     }
+}
+
+/**
+ * Leveragers: the home page of a space the person has joined is never shown (second click on the space in the bar,
+ * "Space home" in the menus, search, links): its first room opens instead. Returns `false`, doing nothing, for
+ * anything else, including a space the person is only invited to (its page is where the invite is accepted). When
+ * the space has no room, `viewSpace` shows its page as before. Never throws.
+ */
+export function redirectSpaceHome(payload: ViewRoomPayload, viewSpace: () => void): boolean {
+    // The developer-mode "room timeline" of a space stays reachable.
+    if (payload.forceTimeline) return false;
+    const space = payload.room_id ? MatrixClientPeg.get()?.getRoom(payload.room_id) : null;
+    if (!space?.isSpaceRoom() || space.getMyMembership() !== KnownMembership.Join) return false;
+    void (async (): Promise<void> => {
+        let room: Room | undefined;
+        try {
+            if (await roomListLoaded()) room = firstRoomOfSpace(space.roomId);
+        } catch (e) {
+            logger.warn("Could not pick the first room of the space", e);
+        }
+        if (room) {
+            logger.debug(`opening ${room.roomId} instead of the home of ${space.roomId}`);
+            viewRoomInSpace(space.roomId, room.roomId);
+        } else {
+            viewSpace();
+        }
+    })();
+    return true;
 }

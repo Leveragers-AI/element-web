@@ -56,6 +56,7 @@ import { ConnectionState, ElementCall } from "../models/Call";
 import { isVideoRoom } from "../utils/video-rooms";
 import { ModuleApi } from "../modules/Api";
 import ActiveWidgetStore from "./ActiveWidgetStore";
+import { redirectSpaceHome } from "../utils/leveragers/firstRoom";
 
 const NUM_JOIN_RETRY = 5;
 
@@ -224,9 +225,12 @@ export class RoomViewStore extends EventEmitter {
             //      - event_id:     '$213456782:matrix.org'
             //      - event_offset: 100
             //      - highlighted:  true
-            case Action.ViewRoom:
-                void this.viewRoom(payload as ViewRoomPayload);
+            case Action.ViewRoom: {
+                const viewRoom = (): void => void this.viewRoom(payload as ViewRoomPayload);
+                // Leveragers: a joined space opens its first room instead of its home page.
+                if (!redirectSpaceHome(payload as ViewRoomPayload, viewRoom)) viewRoom();
                 break;
+            }
             case Action.ViewThread:
                 this.viewThread(payload as ThreadPayload);
                 break;
