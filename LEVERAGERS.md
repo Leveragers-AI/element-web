@@ -1,8 +1,9 @@
 # Patchs Leveragers sur Element Web
 
-La branche `leveragers` part du tag officiel Element `v1.12.32`, avec ces patchs par-dessus. Ce fichier
-sert à celui qui les rejoue sur un nouveau tag (rebase) : une ligne par patch, avec les fichiers
-d'Element qu'il touche.
+La branche `leveragers` part du tag officiel Element `v1.12.32` ; chaque nouvelle version d'Element y entre
+par une fusion de son étiquette (jamais de rebase), en dernier `v1.12.36` (24/11/2026). Ce fichier liste nos
+patchs par-dessus, une ligne par patch avec les fichiers d'Element qu'il touche : c'est la liste à vérifier à
+chaque fusion (skill `element-fork-sync` de Leveragers).
 
 | Commit | But | Fichiers d'Element touchés | Issue Element |
 |---|---|---|---|
