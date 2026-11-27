@@ -181,6 +181,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             const draft = { getText: () => "Typed here", clear: () => () => {} };
             const files = [{ name: "fake.png", size: 1024, type: "image/png" }] as unknown as FileList;
             const expectDraft = (expected: unknown): void =>
