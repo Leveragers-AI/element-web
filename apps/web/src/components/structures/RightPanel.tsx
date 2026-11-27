@@ -88,6 +88,7 @@ export default class RightPanel extends React.Component<Props, IState> {
     public componentWillUnmount(): void {
         this.context?.removeListener(RoomStateEvent.Members, this.onRoomStateMember);
         RightPanelStore.instance.off(UPDATE_EVENT, this.onRightPanelStoreUpdate);
+        this.delayedUpdate.cancel();
     }
 
     public static getDerivedStateFromProps(props: Props): Partial<IState> {
@@ -280,8 +281,12 @@ export default class RightPanel extends React.Component<Props, IState> {
                 break;
 
             case RightPanelPhases.DocumentViewer:
-                if (!!cardState?.documentViewerEvent) {
-                    card = <DocumentViewerCard mxEvent={cardState.documentViewerEvent} onClose={this.onClose} />;
+                if (!!cardState?.documentViewer) {
+                    if ("event" in cardState.documentViewer) {
+                        card = <DocumentViewerCard mxEvent={cardState.documentViewer.event} onClose={this.onClose} />;
+                    } else if ("file" in cardState.documentViewer) {
+                        card = <DocumentViewerCard file={cardState.documentViewer.file} onClose={this.onClose} />;
+                    }
                 }
                 break;
         }

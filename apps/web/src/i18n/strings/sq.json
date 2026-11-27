@@ -2225,7 +2225,6 @@
             "verify_session": "Verifiko sesion",
             "web_session": "Sesion Web"
         },
-        "show_breadcrumbs": "Shfaq te lista e dhomave shkurtore për te dhoma të para së fundi",
         "show_chat_effects": "Shfaq efekte fjalosjeje (animacione kur merren bonbone, për shembull)",
         "show_displayname_changes": "Shfaq ndryshime emrash ekrani",
         "show_join_leave": "Shfaq mesazhe hyrjesh/daljesh (kjo nuk prek mesazhe ftesash/heqjesh/dëbimesh )",
@@ -2752,10 +2751,6 @@
             "error_loading": "S’arrihet të ngarkohet akti të cilit iu përgjigj, ose nuk ekziston, ose s’keni leje ta shihni.",
             "in_reply_to": "<a>Në Përgjigje të</a> <pill>",
             "in_reply_to_for_export": "Në përgjigje të <a>këtij mesazhi</a>"
-        },
-        "scalar_starter_link": {
-            "dialog_description": "Ju ndan një hap nga shpënia te një sajt palë e tretë, që kështu të mund të mirëfilltësoni llogarinë tuaj me %(integrationsUrl)s. Doni të vazhdohet?",
-            "dialog_title": "Shtoni një Integrim"
         },
         "self_redaction": "Mesazhi u fshi",
         "send_state_encrypting": "Po fshehtëzohet meszhi juaj…",

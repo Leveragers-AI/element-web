@@ -14,10 +14,13 @@ import {
     MatrixEventEvent,
     NotificationCountType,
     ReceiptType,
+    RoomStateEvent,
+    type EventTimeline,
     type IRoomTimelineData,
     type MatrixClient,
     type MatrixEvent,
     type Room,
+    type RoomState,
 } from "matrix-js-sdk/src/matrix";
 import { BaseViewModel } from "@element-hq/web-shared-components";
 import { logger } from "matrix-js-sdk/src/logger";
@@ -34,6 +37,14 @@ import { haveRendererForEvent, pickFactory } from "../../../events/EventTileFact
 import shouldHideEvent from "../../../shouldHideEvent";
 import SettingsStore from "../../../settings/SettingsStore";
 import { clearRoomNotification } from "../../../utils/notifications";
+import { findLastSuccessfulWeSent } from "./event-tile/EventTileReceiptState";
+import {
+    getReadReceiptsByShownEvent,
+    getReadReceiptsForEvent,
+    reuseUnchangedReadReceipts,
+    type ShownReadReceipt,
+} from "../../../utils/read-receipts";
+import type { IReadReceiptProps } from "../../../components/views/rooms/EventTile";
 
 const DEBUG_TIMELINE = false;
 
@@ -123,14 +134,40 @@ const PAGINATE_DECRYPT_WAIT_MS = 500;
  * - `live`      — scroll to the live end of the room.
  * - `permalink` — centre on `eventId` and highlight it.
  * - `restore`   — scroll to the saved `eventId` without highlighting.
+ * - `start`     — scroll to the start of the room; `eventId` is its `m.room.create` event.
  */
-type LoadTarget = { kind: "live" } | { kind: "permalink"; eventId: string } | { kind: "restore"; eventId: string };
+type LoadTarget =
+    | { kind: "live" }
+    | { kind: "permalink"; eventId: string }
+    | { kind: "restore"; eventId: string }
+    | { kind: "start"; eventId: string };
+
+/**
+ * What the room timeline publishes to its view: the shared snapshot, plus the per-message detail
+ * the legacy tiles need and the shared view has no opinion about.
+ */
+export interface RoomTimelineViewSnapshot extends TimelineViewSnapshot {
+    /**
+     * Other users' read receipts, keyed by the id of the message they are drawn beside. A receipt
+     * for an event that is not shown (a reaction, a membership change) is drawn beside the last
+     * shown message before it. Empty while read receipts are turned off.
+     */
+    readReceiptsByEvent: ReadonlyMap<string, IReadReceiptProps[]>;
+    /**
+     * The newest message of ours that has reached the server, when it is also the newest message
+     * that could carry a receipt — the one tile that shows a "Sent" tick in place of read
+     * receipts. Mirrors `lastSuccessfulWeSent` in the old MessagePanel.
+     */
+    lastSuccessfulEventId: string | null;
+}
 
 export interface RoomTimelineViewModelOpts {
     client: MatrixClient;
     room: Room;
     /** Optional anchor for initial load (permalink, search result). Shown highlighted and centred. */
     initialEventId?: string;
+    /** Whether other users' read receipts are drawn; see {@link RoomTimelineViewModel.setShowReadReceipts}. Default true. */
+    showReadReceipts?: boolean;
 }
 
 /**
@@ -166,11 +203,20 @@ export interface RoomTimelineViewModelOpts {
  * belongs in {@link start}, which the view calls exactly once.
  */
 export class RoomTimelineViewModel
-    extends BaseViewModel<TimelineViewSnapshot, RoomTimelineViewModelOpts>
+    extends BaseViewModel<RoomTimelineViewSnapshot, RoomTimelineViewModelOpts>
     implements TimelineViewActions
 {
     private readonly opts: RoomTimelineViewModelOpts;
     private timelineWindow: TimelineWindow;
+
+    /** Whether other users' read receipts are drawn; see {@link setShowReadReceipts}. */
+    private showReadReceipts: boolean;
+
+    /**
+     * Where each user's receipt was last drawn, so a receipt that moves onto an event we do not
+     * hold stays where it was; see {@link getReadReceiptsByShownEvent}.
+     */
+    private receiptsByUserId: Map<string, ShownReadReceipt> = new Map();
 
     /**
      * Cache of continuation decisions keyed by event id.
@@ -195,6 +241,16 @@ export class RoomTimelineViewModel
 
     /** Set while a {@link load} is running; see {@link scheduleRebuild}. */
     private loading = false;
+
+    /**
+     * Identifies the most recent jump the reader asked for (start, live end, read marker). A
+     * jump that waits on the server checks it is still the latest before acting; see
+     * {@link requestJump}.
+     */
+    private latestJump: object = {};
+
+    /** A jump asked for while a {@link load} was running, run once it finishes. Only the newest is kept. */
+    private queuedJump: ((scroll: ImmediateScroll) => void) | null = null;
 
     /**
      * In-flight backward pagination chain, or null when idle.
@@ -341,9 +397,12 @@ export class RoomTimelineViewModel
             canJumpToReadMarker: false,
             numUnreadMessages: 0,
             hasHighlights: false,
+            readReceiptsByEvent: new Map(),
+            lastSuccessfulEventId: null,
         });
 
         this.opts = opts;
+        this.showReadReceipts = opts.showReadReceipts ?? true;
         this.timelineWindow = new TimelineWindow(opts.client, opts.room.getUnfilteredTimelineSet(), {
             windowLimit: WINDOW_LIMIT,
         });
@@ -415,6 +474,41 @@ export class RoomTimelineViewModel
             RoomEvent.LocalEchoUpdated,
             this.onLocalEchoUpdated as (...args: unknown[]) => void,
         );
+        // Other users' read receipts moving.
+        this.disposables.trackListener(this.opts.room, RoomEvent.Receipt, this.onRoomReceipt);
+        // Members loading or changing profile, whose receipts carry their avatar and name. Listened
+        // for on the client, which re-emits it for whichever state object the room currently has.
+        this.disposables.trackListener(
+            this.opts.client,
+            RoomStateEvent.Update,
+            this.onRoomStateUpdate as (...args: unknown[]) => void,
+        );
+    }
+
+    /** Someone's read receipt moved. Only the receipts change, so the rows are left alone. */
+    private onRoomReceipt = (): void => {
+        this.updateReadReceipts("receipt");
+    };
+
+    private onRoomStateUpdate = (state: RoomState): void => {
+        if (state.roomId !== this.opts.room.roomId) return;
+        this.updateReadReceipts("members");
+    };
+
+    /**
+     * Update the receipts shown beside the current rows. Skipped while a load or rebuild is due,
+     * since the rows are about to change and that republish updates the receipts anyway.
+     */
+    private updateReadReceipts(reason: string): void {
+        if (this.isDisposed || !this.showReadReceipts || this.loading || this.rebuildQueued) return;
+        this.mergeSnapshot({ readReceiptsByEvent: this.computeReadReceipts() }, reason);
+    }
+
+    /** Show or hide other users' read receipts — the room-level `showReadReceipts` setting. */
+    public setShowReadReceipts(show: boolean): void {
+        if (show === this.showReadReceipts) return;
+        this.showReadReceipts = show;
+        this.mergeSnapshot({ readReceiptsByEvent: this.computeReadReceipts() }, "show-read-receipts");
     }
 
     private onRoomTimeline = (
@@ -687,9 +781,8 @@ export class RoomTimelineViewModel
         try {
             await this.timelineWindow.load(sdkLoadTarget, INITIAL_SIZE);
             if (this.isDisposed) return;
-            // Gather enough messages to fill the window before we show anything. Only a permalink
-            // needs messages on both sides of its target; see fillInitialWindow.
-            await this.fillInitialWindow(target.kind === "permalink" ? sdkLoadTarget : undefined);
+            // Gather enough messages to fill the window before we show anything; see fillInitialWindow.
+            await this.fillInitialWindow(target);
             if (this.isDisposed) return;
             const windowEvents = this.timelineWindow.getEvents();
             debug(
@@ -735,6 +828,10 @@ export class RoomTimelineViewModel
                     RoomTimelineViewModel.saveScrollTarget(this.opts.room.roomId, null);
                     // No anchor needed — fall through to live-end logic below.
                 }
+            } else if (target.kind === "start") {
+                // The start of the room: its first row at the top, skipping a loading spinner.
+                const firstKey = items.find((i) => i.kind !== "loading")?.key;
+                if (firstKey) pendingAnchor = { targetKey: firstKey, align: "start" };
             }
 
             if (!pendingAnchor && items.length > 0 && !this.timelineWindow.canPaginate(Direction.Forward)) {
@@ -767,6 +864,13 @@ export class RoomTimelineViewModel
             this.republish(`load(${target.kind})-error`);
         } finally {
             this.loading = false;
+            const queued = this.queuedJump;
+            this.queuedJump = null;
+            // The view has not drawn the rows this load published yet, so the queued jump
+            // scrolls through `pendingAnchor` rather than the view's immediate scroll.
+            if (queued && !this.isDisposed) {
+                queued((anchor) => this.mergeSnapshot({ pendingAnchor: anchor }, "queued-jump"));
+            }
         }
     }
 
@@ -776,10 +880,11 @@ export class RoomTimelineViewModel
      * before anything is shown.
      *
      * Which way we fetch depends on where we are starting:
-     *  - **Opening a permalink** (`centreOn` set): the message has to sit in the middle, so it
-     *    needs messages on both sides — we aim for about half the target each way. Without the
-     *    newer half it would be the last message in the list, and "centre" would put it at the
-     *    bottom of the screen instead.
+     *  - **Opening a permalink**: the message has to sit in the middle, so it needs messages
+     *    on both sides — we aim for about half the target each way. Without the newer half it
+     *    would be the last message in the list, and "centre" would put it at the bottom of the
+     *    screen instead.
+     *  - **The start of the room**: nothing is older, so only newer messages are needed.
      *  - **Anywhere else**: we start at the newest message, so only older ones are needed.
      *
      * Usually this costs nothing: opening a permalink already fetches the messages around it,
@@ -788,14 +893,23 @@ export class RoomTimelineViewModel
      * do not display cannot hold up the first paint — we show what we have, and the reader's
      * first scroll fetches more in the normal way.
      */
-    private async fillInitialWindow(centreOn: string | undefined): Promise<void> {
+    private async fillInitialWindow(target: LoadTarget): Promise<void> {
         const MAX_FILL_REQUESTS_PER_DIRECTION = 2;
+        const centreOn = target.kind === "permalink" ? target.eventId : undefined;
         const perDirectionTarget = centreOn ? Math.ceil(MIN_INITIAL_EVENTS / 2) : MIN_INITIAL_EVENTS;
+        let directions: Direction[];
+        switch (target.kind) {
+            case "permalink":
+                directions = [Direction.Backward, Direction.Forward];
+                break;
+            case "start":
+                directions = [Direction.Forward];
+                break;
+            default:
+                directions = [Direction.Backward];
+        }
 
-        for (const direction of [Direction.Backward, Direction.Forward]) {
-            // Unanchored loads only need history above the bottom-anchored view.
-            if (!centreOn && direction === Direction.Forward) break;
-
+        for (const direction of directions) {
             let requests = 0;
             while (
                 requests < MAX_FILL_REQUESTS_PER_DIRECTION &&
@@ -977,7 +1091,26 @@ export class RoomTimelineViewModel
 
     // ── Overlay button actions ───────────────────────────────────────
 
+    /**
+     * Run a jump the reader asked for, and make it the latest one. If a load is running, the
+     * jump waits until it finishes and then works from the messages that load loaded, not the
+     * ones it was replacing. A newer jump replaces one that is waiting.
+     */
+    private requestJump(jump: (scroll: ImmediateScroll) => void, scrollNow: ImmediateScroll): void {
+        this.latestJump = {};
+        if (this.loading) {
+            this.queuedJump = jump;
+            return;
+        }
+        this.queuedJump = null;
+        jump(scrollNow);
+    }
+
     public onJumpToReadMarker = (scrollNow: ImmediateScroll): void => {
+        this.requestJump(this.jumpToReadMarker, scrollNow);
+    };
+
+    private jumpToReadMarker = (scrollNow: ImmediateScroll): void => {
         const items = this.snapshot.current.items;
         const rmIdx = items.findIndex((item) => item.kind === "read-marker");
         debug(
@@ -1023,7 +1156,89 @@ export class RoomTimelineViewModel
         this.mergeSnapshot({ items: newItems, canJumpToReadMarker: false }, "mark-all-as-read");
     };
 
+    public onJumpToStart = (scrollNow: ImmediateScroll): void => {
+        this.requestJump(this.jumpToStart, scrollNow);
+    };
+
+    private jumpToStart = (scrollNow: ImmediateScroll): void => {
+        const createEventId = this.opts.room.currentState.getStateEvents(EventType.RoomCreate, "")?.getId();
+        // The window reaches the start of the room if there is nothing older left to fetch,
+        // or if the create event, the room's first event, is already among its events.
+        const nothingOlder = !this.timelineWindow.canPaginate(Direction.Backward);
+        const hasCreateEvent = this.timelineWindow.getEvents().some((e) => e.getId() === createEventId);
+        const reachesStart = nothingOlder || hasCreateEvent;
+        debug(`[TimelineVM] onJumpToStart — createEventId=${createEventId}, reachesStart=${reachesStart}`);
+        if (reachesStart || !createEventId) {
+            // Already loaded, or nothing to load around: go to the top of what we have. Reaching
+            // it loads older history, as scrolling there would.
+            const firstKey = this.firstDisplayedKey();
+            if (firstKey) scrollNow({ targetKey: firstKey, align: "start" });
+            return;
+        }
+        void this.loadStart(createEventId);
+    };
+
+    /** The first row that is not a loading spinner. */
+    private firstDisplayedKey(): string | undefined {
+        return this.snapshot.current.items.find((i) => i.kind !== "loading")?.key;
+    }
+
+    /**
+     * Load the window around the room's create event and anchor to its top. The context is
+     * fetched first so that if the server refuses it, because the room's history visibility
+     * hides events from before we joined, the current window is kept and we go to its top.
+     */
+    private async loadStart(createEventId: string): Promise<void> {
+        const jump = this.latestJump;
+        let timeline: EventTimeline | null | undefined;
+        try {
+            timeline = await this.opts.client.getEventTimeline(
+                this.opts.room.getUnfilteredTimelineSet(),
+                createEventId,
+            );
+        } catch (e) {
+            logger.warn(`[TimelineVM] onJumpToStart — could not load the start of the room`, e);
+        }
+        // Drop it if the reader has asked for another jump while we waited.
+        if (this.isDisposed || jump !== this.latestJump) return;
+        if (!timeline) {
+            const firstKey = this.firstDisplayedKey();
+            if (firstKey) {
+                this.mergeSnapshot({ pendingAnchor: { targetKey: firstKey, align: "start" } }, "jump-to-start");
+            }
+            return;
+        }
+        await this.load({ kind: "start", eventId: createEventId });
+    }
+
+    /**
+     * Go to a message and highlight it, as opening a permalink does. For a message asked for
+     * after the timeline is open, such as a pinned message or a link to this room. Scrolls
+     * straight there when it is loaded, otherwise loads the window around it.
+     */
+    public jumpToEvent(eventId: string, scrollNow: ImmediateScroll): void {
+        this.requestJump((scroll) => {
+            debug(`[TimelineVM] jumpToEvent — ${eventId}`);
+            if (this.snapshot.current.items.some((i) => i.key === eventId)) {
+                this.mergeSnapshot({ highlightedEventId: eventId }, "jump-to-event");
+                scroll({ targetKey: eventId, align: "center" });
+            } else {
+                void this.load({ kind: "permalink", eventId });
+            }
+        }, scrollNow);
+    }
+
+    /** Drop the highlight from the message last jumped to, without moving. */
+    public clearHighlight(): void {
+        if (this.snapshot.current.highlightedEventId === null) return;
+        this.mergeSnapshot({ highlightedEventId: null }, "clear-highlight");
+    }
+
     public onJumpToLive = (scrollNow: ImmediateScroll): void => {
+        this.requestJump(this.jumpToLive, scrollNow);
+    };
+
+    private jumpToLive = (scrollNow: ImmediateScroll): void => {
         debug(`[TimelineVM] onJumpToLive — atLiveEnd=${this.snapshot.current.atLiveEnd}`);
         this.unreadMessageCount = 0;
         if (!this.snapshot.current.atLiveEnd) {
@@ -1226,7 +1441,7 @@ export class RoomTimelineViewModel
      * Publish {@link baseItems} to the View, layering spinners on top:
      * `[ (backward?), ...baseItems, (forward?) ]`.
      */
-    private republish(reason: string, extra: Partial<TimelineViewSnapshot> = {}): void {
+    private republish(reason: string, extra: Partial<RoomTimelineViewSnapshot> = {}): void {
         const items: TimelineItem[] = [];
         if (this.backwardSpinnerVisible) {
             items.push({ kind: "loading", key: RoomTimelineViewModel.BACKWARD_LOADING_KEY });
@@ -1235,7 +1450,17 @@ export class RoomTimelineViewModel
         if (this.forwardSpinnerVisible) {
             items.push({ kind: "loading", key: RoomTimelineViewModel.FORWARD_LOADING_KEY });
         }
-        this.mergeSnapshot({ items, ...extra }, reason);
+        const events = this.loadedEvents();
+        const isShown = this.shownEventTest();
+        this.mergeSnapshot(
+            {
+                items,
+                readReceiptsByEvent: this.computeReadReceipts(events, isShown),
+                lastSuccessfulEventId: this.computeLastSuccessfulEventId(events, isShown),
+                ...extra,
+            },
+            reason,
+        );
     }
 
     /**
@@ -1448,11 +1673,61 @@ export class RoomTimelineViewModel
         return pendingEvents.filter((event) => this.opts.room.eventShouldLiveIn(event, pendingEvents).shouldLiveInRoom);
     }
 
+    /** The loaded events followed by our pending ones, oldest first: what {@link buildItems} draws rows from. */
+    private loadedEvents(): MatrixEvent[] {
+        return [...this.timelineWindow.getEvents(), ...this.pendingEventsToShow()];
+    }
+
     private static readonly CONTINUATION_MAX_INTERVAL = 5 * 60 * 1000;
     private static readonly CONTINUED_TYPES = new Set(["m.room.message", "m.sticker"]);
 
+    /**
+     * Which read receipts to draw beside which message, worked out by the same code as the old
+     * timeline's, over the loaded and pending events, with a row for each event in {@link baseItems}.
+     */
+    private computeReadReceipts(
+        events = this.loadedEvents(),
+        isShown = this.shownEventTest(),
+    ): ReadonlyMap<string, IReadReceiptProps[]> {
+        const previous = this.snapshot.current.readReceiptsByEvent;
+        if (!this.showReadReceipts) {
+            this.receiptsByUserId = new Map();
+            return previous.size === 0 ? previous : new Map();
+        }
+        const { room, client } = this.opts;
+        const myUserId = client.getSafeUserId();
+        const { receiptsByEvent, receiptsByUserId } = getReadReceiptsByShownEvent(
+            events,
+            isShown,
+            (event) => getReadReceiptsForEvent(event, room, room, client, myUserId),
+            this.receiptsByUserId,
+        );
+        this.receiptsByUserId = receiptsByUserId;
+        // Keep what is already published where nothing moved, so those rows are not redrawn.
+        return reuseUnchangedReadReceipts(previous, receiptsByEvent);
+    }
+
+    /** The message showing a "Sent" tick in place of read receipts, if any; see {@link findLastSuccessfulWeSent}. */
+    private computeLastSuccessfulEventId(
+        events: readonly MatrixEvent[],
+        isShown: (event: MatrixEvent) => boolean,
+    ): string | null {
+        // Pending messages count: one the server has accepted takes the tick before its echo arrives.
+        const index = findLastSuccessfulWeSent(events, isShown, this.opts.client.getSafeUserId());
+        return index >= 0 ? (events[index].getId() ?? null) : null;
+    }
+
+    /** Whether an event has a row of its own in {@link baseItems}. */
+    private shownEventTest(): (event: MatrixEvent) => boolean {
+        const shownEventIds = new Set<string>();
+        for (const item of this.baseItems) {
+            if (item.kind === "event") shownEventIds.add(item.key);
+        }
+        return (event) => shownEventIds.has(event.getId()!);
+    }
+
     private buildItems(): TimelineItem[] {
-        const events: MatrixEvent[] = [...this.timelineWindow.getEvents(), ...this.pendingEventsToShow()];
+        const events: MatrixEvent[] = this.loadedEvents();
         const items: TimelineItem[] = [];
         let lastDate: string | null = null;
         let prevEvent: MatrixEvent | null = null;
@@ -1648,7 +1923,7 @@ export class RoomTimelineViewModel
      * a UI jump: filter the console on `[VM-merge]` and find the merge whose
      * field changes line up with the symptom.
      */
-    private mergeSnapshot(partial: Partial<TimelineViewSnapshot>, reason: string): void {
+    private mergeSnapshot(partial: Partial<RoomTimelineViewSnapshot>, reason: string): void {
         const before = this.snapshot.current;
         const changes: string[] = [];
         for (const [k, v] of Object.entries(partial)) {

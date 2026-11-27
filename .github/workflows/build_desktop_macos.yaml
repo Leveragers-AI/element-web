@@ -61,12 +61,16 @@ on:
                 required: false
                 description: "List of targets to build"
                 default: "dmg zip"
-permissions: {} # No permissions required
+permissions:
+    contents: read
 jobs:
     build:
         name: Build macOS Universal
         runs-on: macos-26 # M1
         environment: ${{ inputs.sign && 'Desktop Apple' || '' }}
+        env:
+            # Only element-desktop's deps are installed, stop pnpm reinstalling the workspace before each run/exec
+            PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false"
         steps:
             - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
               with:
@@ -78,25 +82,18 @@ jobs:
                   ref: ${{ inputs.ref }}
                   persist-credentials: false
 
-            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   name: ${{ inputs.prepare-artifact-name }}
                   path: apps/desktop
 
-            # M1 macos-14 comes without Python preinstalled
-            - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-              with:
-                  python-version: "3.13"
-
-            # Install Quartz for DMG badges
-            # https://github.com/electron-userland/electron-builder/issues/9511#issuecomment-3774092888
-            - run: sudo pip3 install pyobjc-framework-Quartz
-
-            - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+            - uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
               with:
                   node-version-file: apps/desktop/.node-version
-                  cache: "pnpm"
+                  cache: true
+                  # PR & merge queue caches are scoped to their own ref so nothing else can restore them
+                  save-cache: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+                  install: false
 
             # Ensure the prebuilt seshat binaries for both architectures get installed for the universal build
             - name: Enable installing optional dependencies for both architectures
@@ -169,16 +166,13 @@ jobs:
                       }],
                     }
                   ' > dist/releases.json
-                  jq -n --arg url "$URL" '
-                    { url: $url }
-                  ' > dist/releases-legacy.json
               env:
                   VERSION: ${{ inputs.version }}
                   BASE_URL: ${{ inputs.base-url }}
 
             # We exclude mac-universal as the unpacked app takes forever to upload and zip and dmg already contains it
             - name: Upload Artifacts
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: ${{ inputs.artifact-prefix }}macos
                   path: |
@@ -206,7 +200,7 @@ jobs:
         with:
             project: macos
             artifact: ${{ inputs.artifact-prefix }}macos
-            runs-on: macos-14
+            runs-on: macos-15
             executable: /Users/runner/Applications/Element*.app/Contents/MacOS/Element*
             # We need to mount the DMG and copy the app to the Applications folder as a mounted DMG is
             # read-only and thus would not allow us to override the fuses as is required for Playwright.

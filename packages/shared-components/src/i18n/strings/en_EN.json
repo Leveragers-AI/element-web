@@ -27,6 +27,7 @@
         "play": "Play",
         "react": "React",
         "remove": "Remove",
+        "remove_this_device": "Remove this device",
         "reply": "Reply",
         "reply_in_thread": "Reply in thread",
         "retry": "Retry",
@@ -93,6 +94,19 @@
     "emoji_picker": {
         "cancel_search_label": "Cancel search",
         "emoji_picker": "Emoji picker"
+    },
+    "encryption": {
+        "delete_key_storage": {
+            "description": "You will lose your encrypted chat history and need to reset your digital identity if you remove all your devices.",
+            "error": "Failed to delete key storage. Please try again."
+        }
+    },
+    "error": {
+        "legacy_crypto_unsupported": {
+            "actions": "Please either downgrade to <b>%(version)s</b> first or remove this device.",
+            "description": "%(brand)s was updated from a very old version and cannot migrate your encryption store to a new format.",
+            "title": "This device cannot be used"
+        }
     },
     "keyboard": {
         "shift": "Shift"

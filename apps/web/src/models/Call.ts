@@ -19,11 +19,12 @@ import { KnownMembership, type Membership } from "matrix-js-sdk/src/types";
 import { logger as rootLogger } from "matrix-js-sdk/src/logger";
 import { secureRandomString } from "matrix-js-sdk/src/randomstring";
 import { CallType } from "matrix-js-sdk/src/webrtc/call";
-import { type IWidgetApiRequest, type ClientWidgetApi, type IWidgetData } from "matrix-widget-api";
+import { type IWidgetApiRequest, type ClientWidgetApi } from "matrix-widget-api";
 import {
     type MatrixRTCSession,
     MatrixRTCSessionEvent,
     MatrixRTCSessionManagerEvents,
+    RTC_CALL_INTENT_AUDIO,
     type Transport,
 } from "matrix-js-sdk/src/matrixrtc";
 
@@ -120,6 +121,8 @@ interface CallEventHandlerMap {
 export abstract class Call extends TypedEventEmitter<CallEvent, CallEventHandlerMap> {
     protected readonly widgetUid: string;
     protected readonly room: Room;
+    /** Whether destroy() has been called, after which an in-flight start() must not add listeners. */
+    protected destroyed = false;
 
     private _callType: CallType;
     public get callType(): CallType {
@@ -323,6 +326,7 @@ export abstract class Call extends TypedEventEmitter<CallEvent, CallEventHandler
      * Stops all internal timers and tasks to prepare for garbage collection.
      */
     public destroy(): void {
+        this.destroyed = true;
         if (this.connected) {
             this.setDisconnected();
             this.close();
@@ -499,6 +503,7 @@ export class JitsiCall extends Call {
 
     public async start(): Promise<ClientWidgetApi> {
         const widgetApi = (await super.start())!;
+        if (this.destroyed) return widgetApi;
         widgetApi.on(`action:${ElementWidgetActions.JoinCall}`, this.onJoin);
         widgetApi.on(`action:${ElementWidgetActions.HangupCall}`, this.onHangup);
         ActiveWidgetStore.instance.on(ActiveWidgetStoreEvent.Dock, this.onDock);
@@ -637,7 +642,6 @@ export interface WidgetGenerationParameters {
 export class ElementCall extends Call {
     public readonly STUCK_DEVICE_TIMEOUT_MS = 1000 * 60 * 60; // 1 hour
 
-    private settingsStoreCallEncryptionWatcher?: string;
     private terminationTimer?: number;
 
     public get presented(): boolean {
@@ -645,6 +649,12 @@ export class ElementCall extends Call {
     }
     public set presented(value: boolean) {
         super.presented = value;
+        this.checkDestroy();
+    }
+
+    protected setDisconnected(): void {
+        super.setDisconnected();
+        // Only a connected call outlives having no members (see checkDestroy)
         this.checkDestroy();
     }
 
@@ -742,7 +752,6 @@ export class ElementCall extends Call {
     ): { intent?: UserIntent; config: ElementCallConfiguration } {
         const { intent, returnToLobby, skipLobby } = ElementCall.getRoomIntent(client, roomId, opts);
         const config: ElementCallConfiguration = {
-            perParticipantE2EE: !!ElementCall.getWidgetData(client, roomId, {}, {}).perParticipantE2EE,
             // on EW we do not want the gradient EC background.
             background: BackgroundStyle.Solid,
             allowIceFallback: !!SettingsStore.getValue("fallbackICEServerAllowed"),
@@ -794,16 +803,18 @@ export class ElementCall extends Call {
      *
      * @param transports - The MatrixRTC transports Element Web knows about
      *   (`CallStore.getConfiguredRTCTransports()`). The component itself only looks at the
-     *   `/rtc/transports` endpoint, not at `.well-known`'s `org.matrix.msc4143.rtc_foci`, so the first
-     *   LiveKit transport is passed along as its configured `livekit_service_url`.
+     *   `/rtc/transports` endpoint, not at `.well-known`'s `org.matrix.msc4143.rtc_foci`, so a
+     *   LiveKit transport is passed along as its configured `livekit_service_url`. The first transport
+     *   of type `m.livekit` is picked if one exists or otherwise the first transport of type `livekit`.
      */
     public static getConfigOptions(transports: Transport[] = []): ConfigOptions {
         const options: ConfigOptions = {};
 
-        const livekitTransport = transports.find(
+        const livekitTransports = transports.filter(
             (t): t is Transport & { livekit_service_url: string } =>
-                t.type === "livekit" && typeof t.livekit_service_url === "string",
+                (t.type === "m.livekit" || t.type === "livekit") && typeof t.livekit_service_url === "string",
         );
+        const livekitTransport = livekitTransports.find((t) => t.type === "m.livekit") ?? livekitTransports[0];
         if (livekitTransport) {
             options.livekit = { livekit_service_url: livekitTransport.livekit_service_url };
         }
@@ -892,10 +903,6 @@ export class ElementCall extends Call {
         // Splice together the Element Call URL for this call
         // Parameters can be found in https://github.com/element-hq/element-call/blob/livekit/src/UrlParams.ts.
         const params = new URLSearchParams({
-            // Template variables are used, so that this can be configured using the widget data.
-            // `config.perParticipantE2EE` is the same decision resolved eagerly; the widget resolves it
-            // from `widget.data` so that changes to the encryption setting reach a running iframe.
-            perParticipantE2EE: "$perParticipantE2EE",
             userId: client.getUserId()!,
             deviceId: client.getDeviceId()!,
             roomId: roomId,
@@ -936,12 +943,7 @@ export class ElementCall extends Call {
     // Creates a new widget if there isn't any widget of typ Call in this room.
     private static createOrGetCallWidget(roomId: string, client: MatrixClient): IApp {
         const ecWidget = WidgetStore.instance.getApps(roomId).find((app) => WidgetType.CALL.matches(app.type));
-        if (ecWidget) {
-            // Always update the widget data because even if the widget is already created,
-            // we might have settings changes that update the widget.
-            ecWidget.data = ElementCall.getWidgetData(client, roomId, ecWidget?.data ?? {}, {});
-            return ecWidget;
-        }
+        if (ecWidget) return ecWidget;
 
         // To use Element Call without touching room state, we create a virtual
         // widget (one that doesn't have a corresponding state event)
@@ -954,29 +956,9 @@ export class ElementCall extends Call {
                 type: WidgetType.CALL.preferred,
                 url: url.toString(),
                 waitForIframeLoad: false,
-                data: ElementCall.getWidgetData(client, roomId, {}, {}),
             },
             roomId,
         );
-    }
-
-    private static getWidgetData(
-        client: MatrixClient,
-        roomId: string,
-        currentData: IWidgetData,
-        overwriteData: IWidgetData,
-    ): IWidgetData {
-        return {
-            ...currentData,
-            ...overwriteData,
-            perParticipantE2EE:
-                client.getRoom(roomId)?.hasEncryptionStateEvent() &&
-                !SettingsStore.getValue("feature_disable_call_per_sender_encryption"),
-        };
-    }
-
-    private onCallEncryptionSettingsChange(): void {
-        this.widget.data = ElementCall.getWidgetData(this.client, this.roomId, this.widget.data ?? {}, {});
     }
 
     private constructor(
@@ -984,15 +966,10 @@ export class ElementCall extends Call {
         widget: IApp,
         client: MatrixClient,
     ) {
-        super(widget, client, session.getConsensusCallIntent() === "audio" ? CallType.Voice : CallType.Video);
+        super(widget, client, session.getConsensusIntent() === RTC_CALL_INTENT_AUDIO ? CallType.Voice : CallType.Video);
 
         this.session.on(MatrixRTCSessionEvent.MembershipsChanged, this.onMembershipChanged);
         this.client.matrixRTC.on(MatrixRTCSessionManagerEvents.SessionEnded, this.checkDestroy);
-        SettingsStore.watchSetting(
-            "feature_disable_call_per_sender_encryption",
-            null,
-            this.onCallEncryptionSettingsChange.bind(this),
-        );
         this.updateParticipants();
     }
 
@@ -1035,6 +1012,7 @@ export class ElementCall extends Call {
             this.widgetGenerationParameters,
         ).toString();
         const widgetApi = (await super.start())!;
+        if (this.destroyed) return widgetApi;
         widgetApi.on(`action:${ElementWidgetActions.JoinCall}`, this.onJoin);
         widgetApi.on(`action:${ElementWidgetActions.HangupCall}`, this.onHangup);
         widgetApi.on(`action:${ElementWidgetActions.Close}`, this.onClose);
@@ -1132,8 +1110,6 @@ export class ElementCall extends Call {
         if (this.presented) this.presented = false;
     }
 
-    private destroyed = false;
-
     public destroy(): void {
         // close() above may re-enter here via checkDestroy while destroying
         if (this.destroyed) return;
@@ -1145,7 +1121,6 @@ export class ElementCall extends Call {
         this.session.off(MatrixRTCSessionEvent.MembershipsChanged, this.onMembershipChanged);
         this.client.matrixRTC.off(MatrixRTCSessionManagerEvents.SessionEnded, this.checkDestroy);
 
-        SettingsStore.unwatchSetting(this.settingsStoreCallEncryptionWatcher);
         clearTimeout(this.terminationTimer);
         this.terminationTimer = undefined;
 
@@ -1154,13 +1129,18 @@ export class ElementCall extends Call {
 
     private checkDestroy = (): void => {
         // A call ceases to exist as soon as all participants leave and also the
-        // user isn't looking at it (for example, waiting in an empty lobby)
-        if (this.session.memberships.length === 0 && !this.presented && !this.room.isCallRoom()) this.destroy();
+        // user isn't looking at it (for example, waiting in an empty lobby).
+        // A call the user is connected to is kept even when no membership is known yet: Element Call reports
+        // having joined before its membership comes back down the sync, and the call may meanwhile have left
+        // the room view (for a Picture-in-Picture window). Disconnecting checks again.
+        if (this.session.memberships.length === 0 && !this.presented && !this.connected && !this.room.isCallRoom()) {
+            this.destroy();
+        }
     };
 
     private readonly onMembershipChanged = (): void => {
         this.updateParticipants();
-        this.callType = this.session.getConsensusCallIntent() === "audio" ? CallType.Voice : CallType.Video;
+        this.callType = this.session.getConsensusIntent() === RTC_CALL_INTENT_AUDIO ? CallType.Voice : CallType.Video;
     };
 
     private updateParticipants(): void {

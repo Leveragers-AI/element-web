@@ -33,7 +33,6 @@ import {
     ElementCall,
     ElementCallIntent,
 } from "./Call";
-import WidgetStore from "../stores/WidgetStore";
 import { WidgetMessagingStore } from "../stores/widgets/WidgetMessagingStore";
 import ActiveWidgetStore, { ActiveWidgetStoreEvent } from "../stores/ActiveWidgetStore";
 import { ElementWidgetActions } from "../stores/widgets/ElementWidgetActions";
@@ -80,8 +79,8 @@ async function connect(call: Call, widgetApi: Mocked<ClientWidgetApi>, startWidg
         vi.advanceTimersByTime(500);
         vi.advanceTimersByTime(500);
     }
-    sessionConnect();
-    await Promise.all([...(startWidget ? [call.start()] : []), runTimers()]);
+    const sessionPromise = sessionConnect();
+    await Promise.all([...(startWidget ? [call.start()] : []), runTimers(), sessionPromise]);
 }
 
 async function disconnect(call: Call, widgetApi: Mocked<ClientWidgetApi>): Promise<void> {
@@ -95,10 +94,10 @@ async function disconnect(call: Call, widgetApi: Mocked<ClientWidgetApi>): Promi
         vi.advanceTimersByTime(500);
         vi.advanceTimersByTime(500);
     }
-    sessionDisconnect();
+    const sessionPromise = sessionDisconnect();
     const promise = call.disconnect();
-    runTimers();
-    await promise;
+    const timersPromise = runTimers();
+    await Promise.all([promise, timersPromise, sessionPromise]);
 }
 
 const cleanUpCallAndWidget = (call: Call, widget: Widget) => {
@@ -1015,9 +1014,9 @@ describe("ElementCall", () => {
 
             // Change call type to voice
             roomSession.memberships = [
-                { sender: alice.userId, deviceId: "alices_device", callIntent: "audio" },
+                { sender: alice.userId, deviceId: "alices_device", intent: "m.audio" },
             ] as unknown as typeof roomSession.memberships;
-            roomSession.getConsensusCallIntent.mockReturnValue("audio");
+            roomSession.getConsensusIntent.mockReturnValue("m.audio");
             roomSession.emit(MatrixRTCSessionEvent.MembershipsChanged, [], []);
 
             expect(call.callType).toBe(CallType.Voice);
@@ -1025,9 +1024,9 @@ describe("ElementCall", () => {
 
             // Change call type back to video
             roomSession.memberships = [
-                { sender: alice.userId, deviceId: "alices_device", callIntent: "video" },
+                { sender: alice.userId, deviceId: "alices_device", intent: "m.video" },
             ] as unknown as typeof roomSession.memberships;
-            roomSession.getConsensusCallIntent.mockReturnValue("video");
+            roomSession.getConsensusIntent.mockReturnValue("m.video");
             roomSession.emit(MatrixRTCSessionEvent.MembershipsChanged, [], []);
 
             expect(call.callType).toBe(CallType.Video);
@@ -1056,25 +1055,6 @@ describe("ElementCall", () => {
             const destroyPersistentWidgetSpy = vi.spyOn(ActiveWidgetStore.instance, "destroyPersistentWidget");
             call.destroy();
             expect(destroyPersistentWidgetSpy).toHaveBeenCalled();
-        });
-
-        it("the perParticipantE2EE url flag is used in encrypted rooms while respecting the feature_disable_call_per_sender_encryption flag", async () => {
-            // We destroy the call created in beforeEach because we test the call creation process.
-            call.destroy();
-            const addWidgetSpy = vi.spyOn(WidgetStore.instance, "addVirtualWidget");
-            // If a room is not encrypted we will never add the perParticipantE2EE flag.
-            const roomSpy = vi.spyOn(room, "hasEncryptionStateEvent").mockReturnValue(true);
-
-            // should create call with perParticipantE2EE flag
-            ElementCall.create(room);
-            expect(Call.get(room)?.widget?.data?.perParticipantE2EE).toBe(true);
-
-            // should create call without perParticipantE2EE flag
-            enabledSettings.add("feature_disable_call_per_sender_encryption");
-            expect(Call.get(room)?.widget?.data?.perParticipantE2EE).toBe(false);
-            enabledSettings.delete("feature_disable_call_per_sender_encryption");
-            roomSpy.mockRestore();
-            addWidgetSpy.mockRestore();
         });
     });
 
@@ -1188,6 +1168,22 @@ describe("ElementCall with the React component embedding", () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
+    it("keeps a joined call that leaves the room view before its membership arrives", () => {
+        // As when the call moves into a Picture-in-Picture window right after joining
+        const onDestroy = vi.fn();
+        call.on(CallEvent.Destroy, onDestroy);
+        call.presented = true;
+        call.handleJoined();
+
+        call.presented = false;
+        expect(onDestroy).not.toHaveBeenCalled();
+        expect(call.connectionState).toBe(ConnectionState.Connected);
+
+        // Hanging up with still nobody in the call ends it
+        call.handleHangup();
+        expect(onDestroy).toHaveBeenCalledTimes(1);
+    });
+
     it("waits for a fresh component after closing", async () => {
         call.markReady();
         await call.start({});
@@ -1239,7 +1235,6 @@ describe("ElementCall with the React component embedding", () => {
             expect(config).toMatchObject({
                 skipLobby: true,
                 background: "solid",
-                perParticipantE2EE: false,
             });
             expect(config.returnToLobby).toBeUndefined();
         });
@@ -1290,6 +1285,15 @@ describe("ElementCall with the React component embedding", () => {
                 { type: "livekit", livekit_service_url: "https://second.example.org" },
             ]);
             expect(options.livekit).toEqual({ livekit_service_url: "https://livekit-jwt.example.org" });
+        });
+
+        it("prefers an m.livekit transport over an earlier livekit one", () => {
+            const options = ElementCall.getConfigOptions([
+                { type: "livekit", livekit_service_url: "https://legacy.example.org" },
+                { type: "m.livekit", url: "wss://sfu.example.org" },
+                { type: "m.livekit", url: "wss://sfu.example.org", livekit_service_url: "https://stable.example.org" },
+            ]);
+            expect(options.livekit).toEqual({ livekit_service_url: "https://stable.example.org" });
         });
 
         it("leaves the transport to the component when none is known", () => {

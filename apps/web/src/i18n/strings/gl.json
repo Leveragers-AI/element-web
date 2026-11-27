@@ -1975,7 +1975,6 @@
             "verified_sessions_list_description": "Para a mellor seguridade, desconecta calquera outra sesión que xa non recoñezas ou uses.",
             "verify_session": "Verificar sesión"
         },
-        "show_breadcrumbs": "Mostrar atallos a salas vistas recentemente enriba da lista de salas",
         "show_chat_effects": "Mostrar efectos no chat (animacións na recepción, ex. confetti)",
         "show_displayname_changes": "Mostrar cambios do nome mostrado",
         "show_join_leave": "Mostrar unirse/saír (convites/eliminacións/vetos non afectados)",
@@ -2478,10 +2477,6 @@
             "error_loading": "Non se cargou o evento ao que respondía, ou non existe ou non ten permiso para velo.",
             "in_reply_to": "<a>En resposta a</a> <pill>",
             "in_reply_to_for_export": "En resposta a <a>esta mensaxe</a>"
-        },
-        "scalar_starter_link": {
-            "dialog_description": "Vai ser redirixido a unha web de terceiros para poder autenticar a súa conta e así utilizar %(integrationsUrl)s. Quere continuar?",
-            "dialog_title": "Engadir unha integración"
         },
         "self_redaction": "Mensaxe eliminada",
         "send_state_failed": "Fallou o envío",

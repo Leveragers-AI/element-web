@@ -61,7 +61,7 @@ describe("theme", () => {
         it("should switch theme on onload call", async () => {
             // When
             await new Promise((resolve) => {
-                setTheme("light").then(resolve);
+                void setTheme("light").then(resolve);
                 lightTheme.onload!({} as Event);
             });
 
@@ -75,7 +75,7 @@ describe("theme", () => {
         it("should switch to dark", async () => {
             // When
             await new Promise((resolve) => {
-                setTheme("dark").then(resolve);
+                void setTheme("dark").then(resolve);
                 darkTheme.onload!({} as Event);
             });
 
@@ -107,7 +107,7 @@ describe("theme", () => {
             // When
             vi.useFakeTimers();
             await new Promise((resolve) => {
-                setTheme("light").then(resolve);
+                void setTheme("light").then(resolve);
                 vi.spyOn(document, "styleSheets", "get").mockReturnValue([lightTheme] as any);
                 vi.advanceTimersByTime(200);
             });
@@ -137,11 +137,41 @@ describe("theme", () => {
 
             const spy = vi.spyOn(document.head, "appendChild").mockImplementation(() => undefined as any);
             await new Promise((resolve) => {
-                setTheme("custom-blue").then(resolve);
+                void setTheme("custom-blue").then(resolve);
                 lightCustomTheme.onload!({} as Event);
             });
             expect(spy).toHaveBeenCalled();
             expect(spy.mock.calls[0][0].textContent).toMatchSnapshot();
+            spy.mockRestore();
+        });
+
+        it("does not give custom theme style sheets a title", async () => {
+            vi.spyOn(SettingsStore, "getValue").mockReturnValue([
+                {
+                    name: "blue",
+                    fonts: {
+                        faces: [
+                            {
+                                "font-family": "Blue",
+                                "src": [{ url: "https://example.org/blue.woff2", format: "woff2" }],
+                            },
+                        ],
+                    },
+                    compound: {
+                        "--cpd-color-text-action-accent": "var(--cpd-color-blue-900)",
+                    },
+                },
+            ] as any);
+
+            const spy = vi.spyOn(document.head, "appendChild").mockImplementation(() => undefined as any);
+            await new Promise((resolve) => {
+                void setTheme("custom-blue").then(resolve);
+                lightCustomTheme.onload!({} as Event);
+            });
+            expect(spy).toHaveBeenCalledTimes(2);
+            for (const [style] of spy.mock.calls) {
+                expect((style as HTMLStyleElement).hasAttribute("title")).toBe(false);
+            }
             spy.mockRestore();
         });
 
@@ -160,7 +190,7 @@ describe("theme", () => {
                 setProperty: spy,
             } as any);
             await new Promise((resolve) => {
-                setTheme("custom-blue").then(resolve);
+                void setTheme("custom-blue").then(resolve);
                 lightCustomTheme.onload!({} as Event);
             });
             expect(spy).toHaveBeenCalledWith("--sidebar-color", "#abcd");
@@ -184,7 +214,7 @@ describe("theme", () => {
                 setProperty: spy,
             } as any);
             await new Promise((resolve) => {
-                setTheme("custom-blue").then(resolve);
+                void setTheme("custom-blue").then(resolve);
                 lightCustomTheme.onload!({} as Event);
             });
             expect(spy).toHaveBeenCalledWith("--sidebar-color", "#abcdef");
@@ -231,7 +261,7 @@ describe("theme", () => {
         beforeEach(() => {
             // Reset document state
             document.body.style.cssText = "";
-            document.head.querySelectorAll("style[title^='custom-theme-']").forEach((el) => el.remove());
+            document.head.querySelectorAll("style[data-mx-custom-theme]").forEach((el) => el.remove());
         });
 
         it("should not remove font family custom properties", async () => {
@@ -256,7 +286,7 @@ describe("theme", () => {
 
             // Trigger clearCustomTheme via setTheme
             await new Promise((resolve) => {
-                setTheme("light").then(resolve);
+                void setTheme("light").then(resolve);
                 lightTheme.onload!({} as Event);
             });
 

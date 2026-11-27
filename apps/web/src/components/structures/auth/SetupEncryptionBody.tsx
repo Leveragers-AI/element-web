@@ -29,9 +29,11 @@ import ExternalLink from "../../views/elements/ExternalLink";
 import dispatcher from "../../../dispatcher/dispatcher";
 import E2EIcon from "../../views/rooms/E2EIcon.tsx";
 import { E2EStatus } from "../../../utils/ShieldUtils.ts";
+import { type ResetIdentityBodyVariant } from "../../views/settings/encryption/ResetIdentityBody.tsx";
 
 interface IProps {
     onFinished: () => void;
+
     /**
      * Offer the user an option to log out, instead of setting up encryption.
      *
@@ -42,6 +44,11 @@ interface IProps {
      * Defaults to `false` if omitted.
      */
     allowLogout?: boolean;
+
+    /**
+     * True if the user has any encrypted rooms.
+     */
+    anyEncryptedRooms?: boolean;
 }
 
 interface IState {
@@ -136,9 +143,18 @@ export default class SetupEncryptionBody extends React.Component<IProps, IState>
                 const store = SetupEncryptionStore.sharedInstance();
                 store.done();
             },
-            variant: store.lostKeys() ? "no_verification_method" : "confirm",
+            onSignOut: () => {
+                dispatcher.dispatch({ action: "logout" });
+            },
+            variant: this.resetIdentityVariant(store, this.props.anyEncryptedRooms),
         });
     };
+
+    private resetIdentityVariant(store: SetupEncryptionStore, anyEncryptedRooms?: boolean): ResetIdentityBodyVariant {
+        const noVerificationMethod = store.lostKeys() && this.props.allowLogout;
+
+        return noVerificationMethod ? (anyEncryptedRooms ? "no_verification_method" : "no_encrypted_rooms") : "confirm";
+    }
 
     private onSignOutClick = (): void => {
         dispatcher.dispatch({ action: "logout" });
@@ -202,7 +218,12 @@ export default class SetupEncryptionBody extends React.Component<IProps, IState>
                 );
             }
 
-            const cantConfirmKind = store.keyInfo ? "secondary" : "primary";
+            // The "Can't confirm?" button is secondary if there is a better way
+            // to become verified available. If it's the only non-disabled
+            // button, it is primary.
+            const deviceOrRecoveryAvailable = store.keyInfo || store.hasDevicesToVerifyAgainst;
+            const cantConfirmKind = deviceOrRecoveryAvailable ? "secondary" : "primary";
+
             const cantConfirmButton = (
                 <Button kind={cantConfirmKind} onClick={this.onCantConfirmClick}>
                     {_t("encryption|verification|cant_confirm")}

@@ -46,6 +46,8 @@ export interface Api extends DialogApiExtension, AccountAuthApiExtension, Profil
     // @alpha
     readonly customisations: CustomisationsApi;
     // @alpha
+    readonly documentPreviews: DocumentPreviewApi;
+    // @alpha
     readonly extras: ExtrasApi;
     readonly i18n: I18nApi;
     readonly navigation: NavigationApi;
@@ -97,6 +99,7 @@ export interface ClientApi {
     // @alpha
     readonly creationManagement: ClientCreationManagementApi;
     getRoom: (id: string) => Room | null;
+    waitForClientStarted(): Promise<void>;
 }
 
 // @public
@@ -203,6 +206,12 @@ export type CustomMessageComponentProps = {
 };
 
 // @alpha
+export interface CustomMessageGrouping {
+    getKey?: (mxEvent: MatrixEvent) => string;
+    getSummary: (events: readonly MatrixEvent[]) => string;
+}
+
+// @alpha
 export type CustomMessageRenderFunction = (
 props: CustomMessageComponentProps,
 originalComponent?: (props?: OriginalMessageComponentProps) => React.JSX.Element) => JSX.Element;
@@ -211,6 +220,9 @@ originalComponent?: (props?: OriginalMessageComponentProps) => React.JSX.Element
 export type CustomMessageRenderHints = {
     allowEditingEvent?: boolean;
     allowDownloadingMedia?: (mxEvent: MatrixEvent) => Promise<boolean>;
+    renderAsInfoMessage?: boolean;
+    renderSenderProfile?: boolean;
+    renderGroupSummary?: CustomMessageGrouping;
 };
 
 // @alpha
@@ -240,7 +252,8 @@ export type DialogHandle<M> = {
 
 // @public
 export interface DialogOptions {
-    title: string;
+    ariaLabel?: string;
+    title?: string;
 }
 
 // @public
@@ -248,6 +261,25 @@ export type DialogProps<M> = {
     onSubmit(this: void, model: M): void;
     onCancel(this: void): void;
 };
+
+// @alpha
+export interface DocumentPreviewApi {
+    getPreviewOpener(file: DocumentPreviewFileInfo): DocumentPreviewOpener | null;
+}
+
+// @alpha
+export interface DocumentPreviewFile {
+    blob: () => Promise<Blob>;
+}
+
+// @alpha
+export interface DocumentPreviewFileInfo {
+    mimetype: string;
+    name?: string;
+}
+
+// @alpha
+export type DocumentPreviewOpener = (file: DocumentPreviewFile) => void;
 
 // @alpha
 export type ExtendablePropsRenderFunction<BaseProps> = <P extends BaseProps>(
@@ -258,6 +290,7 @@ originalComponent: (props: P) => JSX.Element) => JSX.Element;
 export interface ExtrasApi {
     addRoomHeaderButtonCallback(cb: RoomHeaderButtonsCallback): void;
     getVisibleRoomBySpaceKey(spaceKey: string, cb: () => string[]): void;
+    setCreditsAttribution(attributionId: string, render: () => JSX.Element): void;
     setSpacePanelItem(spaceKey: string, props: SpacePanelItemProps): void;
 }
 
@@ -366,7 +399,9 @@ export type PreloadApprover = (widget: WidgetDescriptor) => MaybePromise<boolean
 
 // @public
 export interface Profile {
+    deviceId?: string;
     displayName?: string;
+    homeserverUrl?: string;
     isGuest?: boolean;
     userId?: string;
 }
@@ -387,7 +422,10 @@ export interface RichVariables {
 // @public
 export interface Room {
     getLastActiveTimestamp: () => number;
+    // @alpha
+    getStateEvents(eventType: string): Watchable<RoomStateEvent[]>;
     id: string;
+    isEncrypted: Watchable<boolean | undefined>;
     name: Watchable<string>;
 }
 
@@ -398,6 +436,12 @@ export type RoomHeaderButtonsCallback = (roomId: string) => JSX.Element | undefi
 export interface RoomListStoreApi {
     getRooms(): Watchable<Room[]>;
     waitForReady(): Promise<void>;
+}
+
+// @alpha
+export interface RoomStateEvent {
+    content: Record<string, unknown>;
+    stateKey: string;
 }
 
 // @alpha
@@ -462,6 +506,8 @@ export const enum UIComponent {
     ExploreRooms = "UIComponent.exploreRooms",
     FilterContainer = "UIComponent.filterContainer",
     InviteUsers = "UIComponent.sendInvites",
+    PublicRooms = "UIComponent.publicRooms",
+    ReleaseAnnouncements = "UIComponent.releaseAnnouncements",
     RoomOptionsMenu = "UIComponent.roomOptionsMenu"
 }
 
@@ -477,9 +523,9 @@ export type UrlPreviewHandler = (url: string, mxEvent?: MatrixEvent) => Promise<
 
 // @alpha
 export interface UserCertificate {
-    // (undocumented)
     certificate: CertificateInfo;
     chain: string;
+    chainValidTo: Date;
 }
 
 // @public
@@ -567,6 +613,7 @@ export type X509IpcErrorCode =
 | "MODULE_NOT_LOADED"
 | "KEY_NOT_FOUND"
 | "CERTIFICATE_NOT_FOUND"
+| "CERTIFICATE_INVALID"
 | "PRIVATE_KEY_NOT_FOUND"
 /**
 * `signData` was called before `logIntoKey`, or the session was invalidated since.

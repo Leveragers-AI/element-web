@@ -1896,7 +1896,6 @@
             "verify_session": "Sannprófa setu",
             "web_session": "Vefseta"
         },
-        "show_breadcrumbs": "Sýna flýtileiðir í nýskoðaðar spjallrásir fyrir ofan listann yfir spjallrásir",
         "show_chat_effects": "Sýna hreyfingar í spjalli (t.d. þegar tekið er við skrauti)",
         "show_displayname_changes": "Sýna breytingar á birtingarnafni",
         "show_join_leave": "Birta taka-þátt/hætta skilaboð (hefur ekki áhrif á boð/fjarlægingu/bönn)",
@@ -2408,10 +2407,6 @@
         "reply": {
             "in_reply_to": "<a>Sem svar til</a> <pill>",
             "in_reply_to_for_export": "Sem svar við <a>þessum skilaboðum</a>"
-        },
-        "scalar_starter_link": {
-            "dialog_description": "Verið er að beina þér á utanaðkomandi vefsvæði til að auðkenna aðganginn þinn til notkunar með %(integrationsUrl)s. Viltu halda áfram?",
-            "dialog_title": "Bæta við samþættingu"
         },
         "self_redaction": "Skilaboðum eytt",
         "send_state_failed": "Mistókst að senda",

@@ -17,7 +17,7 @@ import {
 } from "matrix-js-sdk/src/matrix";
 import { render } from "test-utils-rtl";
 import { vi, describe, it, expect, beforeEach, afterEach, afterAll, type MockedObject } from "vitest";
-import { getRoomContext, mkEvent, mkStubRoom, stubClient } from "test-utils";
+import { getRoomContext, mkEvent, mkStubRoom, stubClient, tearDownAfterTest } from "test-utils";
 
 import { RoomUploadContextProvider, RoomUploadViewModel } from "./RoomUploadViewModel";
 import { TimelineRenderingType } from "../../contexts/RoomContext";
@@ -59,6 +59,7 @@ describe("RoomUploadViewModel", () => {
             undefined,
             () => {},
         );
+        tearDownAfterTest(vm);
         expect(vm.getSnapshot().options).toHaveLength(maySendMessage ? 1 : 0);
         room.maySendMessage.mockReturnValue(!maySendMessage);
         room.emit(RoomEvent.CurrentStateUpdated, room, null as any, null as any);
@@ -80,6 +81,7 @@ describe("RoomUploadViewModel", () => {
             () => {},
             compApi,
         );
+        tearDownAfterTest(vm);
         const onSelected = vi.fn();
         const icon = { myicon: 5 } as any;
         compApi.addFileUploadOption({
@@ -116,6 +118,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             await vm.initiateViaInputFiles([] as unknown as FileList);
             expect(dis.dispatch).toHaveBeenCalledWith({ action: "require_registration" });
         });
@@ -129,6 +132,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             await vm.initiateViaInputFiles([] as unknown as FileList);
             expect(dis.dispatch).not.toHaveBeenCalled();
         });
@@ -143,6 +147,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             const replyEvent = mkEvent({ event: true, type: "anything", user: "anyone", content: {} });
             vm.setReplyToEvent(replyEvent);
             const threadRelation: IEventRelation = { key: "foo" };
@@ -213,6 +218,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             await vm.initiateViaDataTransfer({} as DataTransfer);
             expect(dis.dispatch).toHaveBeenCalledWith({ action: "require_registration" });
         });
@@ -226,6 +232,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             await vm.initiateViaDataTransfer({ files: [] as unknown as FileList } as DataTransfer);
             expect(dis.dispatch).not.toHaveBeenCalled();
         });
@@ -240,6 +247,7 @@ describe("RoomUploadViewModel", () => {
                 undefined,
                 () => {},
             );
+            tearDownAfterTest(vm);
             const replyEvent = mkEvent({ event: true, type: "anything", user: "anyone", content: {} });
             vm.setReplyToEvent(replyEvent);
             const threadRelation: IEventRelation = { key: "foo" };
@@ -320,7 +328,7 @@ describe("RoomUploadViewModel", () => {
             threadRelation?: IEventRelation,
             timelineRenderingType = TimelineRenderingType.Room,
         ): RoomUploadViewModel {
-            return new RoomUploadViewModel(
+            const vm = new RoomUploadViewModel(
                 room,
                 client,
                 timelineRenderingType,
@@ -329,6 +337,7 @@ describe("RoomUploadViewModel", () => {
                 threadRelation,
                 openUploadDialog,
             );
+            return tearDownAfterTest(vm);
         }
 
         it("tracks AttachmentOpen and invokes the upload function when 'local' is selected", () => {

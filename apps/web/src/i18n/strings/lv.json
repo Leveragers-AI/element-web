@@ -1181,8 +1181,6 @@
         "bridge_state_workspace": "Darbavieta: <networkLink/>",
         "click_for_info": "Noklikšķiniet, lai iegūtu vairāk informācijas",
         "currently_experimental": "Pašlaik eksperimentāls.",
-        "dynamic_room_predecessors": "Dinamiski istabas priekšteči",
-        "dynamic_room_predecessors_description": "Iespējot MSC3946 (lai nodrošinātu vēlu ierašanās istabu arhīvu atbalstu)",
         "element_call_video_rooms": "Element Call video istabas",
         "experimental_description": "Vai jūtaties gatavs eksperimentiem? Izmēģiniet mūsu jaunākās idejas izstrādes stadijā. Šīs funkcijas nav pabeigtas un var būt nestabilas, var mainīties vai vispār var tikt atmestas. <a> Uzzināt vairāk</a> .",
         "experimental_section": "Agrīnie priekšskatījumi",
@@ -1308,7 +1306,6 @@
     },
     "member_list_back_action_label": "Istabas dalībnieki",
     "message_edit_dialog_title": "Ziņas labojumi",
-    "migrating_crypto": "Uzgaidiet! Mēs atjauninām %(brand)s, lai šifrēšana būtu ātrāka un uzticamāka.",
     "mobile_guide": {
         "toast_accept": "Izmantot lietotni",
         "toast_description": "%(brand)s mobilajā tīmekļa pārlūkprogrammā ir eksperimentāls. Lai iegūtu labāku pieredzi un jaunāko funkcionalitāti, izmantojiet mūsu bezmaksas mobilo lietotni.",
@@ -2315,7 +2312,6 @@
             "web_session": "Tīmekļa sesija"
         },
         "show_avatar_changes": "Rādīt profila attēla izmaiņas",
-        "show_breadcrumbs": "Rādīt saīsnes uz nesen skatītajām istabām istabu saraksta augšpusē",
         "show_chat_effects": "Rādīt tērzēšanas efektus (piemēram, animācijas, kad tiek saņemts konfeti)",
         "show_displayname_changes": "Rādīt parādāmā vārda izmaiņas",
         "show_join_leave": "Rādīt pievienošanās/atstāšanas ziņas (netiek ietekmēti uzaicinājumi/noņemšana/aizliegumi)",
@@ -2864,10 +2860,6 @@
             "error_loading": "Nevar ielādēt notikumu, uz kuru tika atbildēts, jo tas vai nu neeksistē, vai arī jums nav atļaujas to skatīt.",
             "in_reply_to": "<a>Atbildē uz</a> <pill>",
             "in_reply_to_for_export": "Atbildot uz <a>šo ziņu</a>"
-        },
-        "scalar_starter_link": {
-            "dialog_description": "Jūs tiksiet novirzīts uz trešās puses vietni, lai jūs varētu autentificēt savu kontu %(integrationsUrl)s lietošanai. Vai vēlaties turpināt?",
-            "dialog_title": "Pievienot integrāciju"
         },
         "self_redaction": "Ziņa ir izdzēsta",
         "send_state_encrypting": "Ziņas šifrēšana...",
