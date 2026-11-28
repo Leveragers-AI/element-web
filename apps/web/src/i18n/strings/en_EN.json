@@ -1711,6 +1711,12 @@
         "success_title_mac": "Last step: keep it in the Dock",
         "success_title_windows": "Last step: pin it to the taskbar"
     },
+    "leveragers_sign_in": {
+        "continue": "Continue",
+        "email_label": "Email",
+        "front_door_error": "Can't reach sign-in. Check your connection and try again.",
+        "invalid_email": "Enter a valid email address."
+    },
     "lightbox": {
         "rotate_left": "Rotate Left",
         "rotate_right": "Rotate Right",

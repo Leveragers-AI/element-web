@@ -33,6 +33,7 @@ import RoomAvatar from "../components/views/avatars/RoomAvatar";
 import { ModuleNotificationDecoration } from "../modules/components/ModuleNotificationDecoration";
 import Login from "../Login.ts";
 import { startOAuthLogin } from "../utils/oauth/authorize.ts";
+import { DEFAULT_FRONT_DOOR_URL, isAllowedServer, keepLastEmail } from "./leveragers/frontDoor";
 
 // oxlint-disable-next-line node/no-process-env
 logger.log(`Application is running in ${process.env.NODE_ENV} mode`);
@@ -58,7 +59,7 @@ function onTokenLoginCompleted(urlParams: URLParams, fragmentAfterLogin: string)
     window.history.replaceState(null, "", url.href);
 }
 
-async function redirectToSso(config: ValidatedServerConfig): Promise<boolean> {
+async function redirectToSso(config: ValidatedServerConfig, loginHint?: string): Promise<boolean> {
     logger.log("Bypassing app load to redirect to SSO");
 
     try {
@@ -69,7 +70,14 @@ async function redirectToSso(config: ValidatedServerConfig): Promise<boolean> {
 
         const nativeOAuthFlow = flows.find((flow) => "clientId" in flow);
         if (nativeOAuthFlow && config.delegatedAuthentication) {
-            await startOAuthLogin(config.delegatedAuthentication, nativeOAuthFlow.clientId, config.hsUrl, config.isUrl);
+            await startOAuthLogin(
+                config.delegatedAuthentication,
+                nativeOAuthFlow.clientId,
+                config.hsUrl,
+                config.isUrl,
+                undefined,
+                loginHint,
+            );
             return true;
         }
 
@@ -85,6 +93,37 @@ async function redirectToSso(config: ValidatedServerConfig): Promise<boolean> {
     }
 
     return false;
+}
+
+/**
+ * Leveragers: Element's sign-in on the chat server the front door chose, with the typed email as
+ * `login_hint`. Only a server passing {@link isAllowedServer}; `false` when it could not start.
+ */
+async function signInOnServer(server: string, email: string): Promise<boolean> {
+    if (!isAllowedServer(server)) return false;
+    try {
+        return await redirectToSso(await AutoDiscoveryUtils.validateServerName(server), email);
+    } catch (e) {
+        logger.error("Sign-in could not start on " + server, e);
+        return false;
+    }
+}
+
+/** Leveragers: our email screen, over Element's welcome and sign-in pages. Shown once. */
+async function showSignInScreen(): Promise<void> {
+    const { renderSignInScreen } = await import(
+        /* webpackChunkName: "leveragers-sign-in" */
+        "./leveragers/SignInScreen"
+    );
+    renderSignInScreen(SdkConfig.get().leveragers_front_door_url || DEFAULT_FRONT_DOOR_URL, signInOnServer);
+}
+
+/** Leveragers: when Element would show its welcome or sign-in page (after a sign-out), the email screen. */
+function onNewScreenOrSignIn(screen: string, replaceLast?: boolean): void {
+    onNewScreen(screen, replaceLast);
+    if (screen === "welcome" || screen === "login") {
+        showSignInScreen().catch((e) => logger.error("Email screen failed", e));
+    }
 }
 
 export async function loadApp(urlParams: URLParams, matrixChatRef: React.Ref<MatrixChat>): Promise<ReactElement> {
@@ -140,6 +179,14 @@ export async function loadApp(urlParams: URLParams, matrixChatRef: React.Ref<Mat
         }
     }
 
+    // Leveragers: signed out, the email screen picks the chat server before the sign-in starts. Drawn
+    // before Element mounts, so its welcome page never shows (`sso_redirect_options.immediate` must
+    // leave config.json: it would jump to sign-in on the default server first).
+    keepLastEmail();
+    if (!hasPossibleToken && !isReturningFromSso) {
+        await showSignInScreen().catch((e) => logger.error("Email screen failed", e));
+    }
+
     const defaultDeviceName =
         snakedConfig.get("default_device_display_name") ?? platform?.getDefaultDeviceDisplayName();
 
@@ -147,7 +194,7 @@ export async function loadApp(urlParams: URLParams, matrixChatRef: React.Ref<Mat
         <StrictMode>
             <MatrixChat
                 ref={matrixChatRef}
-                onNewScreen={onNewScreen}
+                onNewScreen={onNewScreenOrSignIn}
                 config={config}
                 urlParams={urlParams}
                 enableGuest={!config.disable_guests}

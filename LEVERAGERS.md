@@ -23,8 +23,71 @@ chaque fusion (skill `element-fork-sync` de Leveragers).
 | `feat/micro-barre` | Barre de saisie : le micro (message vocal) est toujours affiché à côté du trombone au lieu d'être rangé dans le menu « ... » ; ce menu disparaît de lui-même quand il est vide (sondages, autocollants et position coupés par la config). Fenêtre étroite (moins d'environ 1000 px) : inchangé, Element y cache le micro exprès | `src/components/views/rooms/MessageComposerButtons.tsx` (l'appel `voiceRecordingButton` passe de `moreButtons` à `mainButtons`, branche non étroite) (+ test) | aucune |
 | `feat/sans-accueil-espace` | La page d'accueil d'un espace rejoint ne s'affiche plus : second clic sur l'espace dans la barre, « Accueil de l'espace », recherche Cmd+K ou lien ouvrent à la place le premier salon de l'espace (même règle que `feat/ouverture-premier-salon`) ; la page reste pour un espace où l'on est seulement invité (on y accepte l'invitation), pour un espace sans salon, et pour la vue « historique » du mode développeur ; les entrées de menu qui y menaient sont masquées par la config (v8) | `src/stores/RoomViewStore.tsx` (un import + un test dans le cas `ViewRoom`) ; le reste dans `src/utils/leveragers/firstRoom.ts` (+ test) | aucune |
 | `fix/sections-salons-quittes` | « Créer une section » (étape « Ajouter des discussions ») ne propose plus les salons quittés : seulement ceux dont on est membre ou invité. Element les gardait en mémoire (marqués « quitté ») et les proposait, même après rechargement ; le défaut est aussi dans `develop` au 2026-11-26 | `src/viewmodels/room-list/CreateSectionDialogViewModel.tsx` (un filtre dans `loadRooms`, + test) | aucune (pas signalé, décision d'Arnaud du 2026-11-26) |
+| `feat/front-door` | Écran « E-mail » à la place du passage direct à la connexion : l'adresse tapée choisit le serveur de discussion (porte d'entrée `login.leveragers.com`, puis locataire Microsoft), puis la connexion d'Element démarre sur ce serveur avec l'adresse en `login_hint` ; seuls `chat.leveragers.com` et les noms en `.leveragers.com` sont acceptés ; dernière adresse retenue sur l'appareil ; détail plus bas | `src/vector/app.tsx` (un import, un paramètre de `redirectToSso`, trois fonctions, un appel avant le montage de `MatrixChat`, `onNewScreen` enveloppé), `src/utils/oauth/authorize.ts` (paramètre `loginHint` de `startOAuthLogin`, + un test dans `authorize.test.ts`), `src/IConfigOptions.ts` (un champ), `src/i18n/strings/{en_EN,fr}.json` (section `leveragers_sign_in`) ; le reste est neuf : `src/vector/leveragers/{frontDoor.ts,SignInScreen.tsx}` (+ tests), `Icon` et `Mark` exportés de `InstallScreen.tsx` | aucune (Tuwunel ignore `login_hint`, MSC4198 : notre page de connexion le lit) |
 
 Chemins relatifs à `apps/web/` sauf `modules/`.
+
+## `feat/front-door` : le serveur de discussion choisi par l'adresse e-mail
+
+Chaque infrastructure (pro, puis une par client entreprise) a son propre serveur de discussion, qui fait sa propre
+connexion : l'app doit savoir lequel prendre avant que la connexion commence (plan 19 du dépôt pool, partie A2).
+Déconnecté, le navigateur voit donc, après notre écran d'installation (inchangé), un écran « E-mail » : un champ et
+« Continuer », sur le fond de l'écran d'installation.
+
+Règles (les mêmes dans les apps iOS et Android) :
+
+- adresse = saisie sans espaces autour ; domaine = ce qui suit le dernier « @ », en minuscules. Domaine avec un
+  caractère non ASCII : serveur pro (`chat.leveragers.com`), sans rien demander. Domaine mal formé : « Saisissez une
+  adresse e-mail valide. » ;
+- `GET <porte>/d/<domaine>.json` (8 s au plus) : 200 valide, ce serveur ; 404, l'étape suivante ; toute autre
+  réponse, délai dépassé, erreur réseau ou contenu invalide : erreur de porte d'entrée ;
+- sans fichier de domaine : découverte publique Microsoft
+  (`https://login.microsoftonline.com/<domaine>/v2.0/.well-known/openid-configuration`, 8 s au plus) ; si son
+  `issuer` donne un identifiant de locataire, `GET <porte>/t/<locataire>.json` : 200 valide, ce serveur ; 404,
+  serveur pro ; le reste, erreur de porte d'entrée. Tout échec du côté Microsoft : serveur pro ;
+- contenu valide : un objet JSON `{"v": 1, "server": "<nom>"}` dont le nom est `chat.leveragers.com` ou un nom sous
+  `.leveragers.com` (`isAllowedServer`, seul garde des serveurs acceptés) ; autre chose est une erreur ;
+- erreur de porte d'entrée : « Connexion impossible pour le moment. Vérifiez votre connexion et réessayez. »,
+  l'adresse reste dans le champ, jamais de repli sur le serveur pro ;
+- serveur trouvé : `AutoDiscoveryUtils.validateServerName` (découverte `.well-known` d'Element), puis la connexion
+  OIDC d'Element (`redirectToSso`, comme `sso_redirect_options.immediate`), avec `login_hint=<adresse>` ajouté à
+  l'adresse d'autorisation (matrix-js-sdk n'a pas d'option pour ça) ;
+- la dernière adresse tapée est gardée dans un cookie `lvg_last_email` (Element vide le localStorage à la
+  déconnexion), réécrit à chaque démarrage (Safari limite à 7 jours un cookie écrit par script), pour pré-remplir le
+  champ.
+
+Réglages de config.json :
+
+- `leveragers_front_door_url` : adresse de la porte d'entrée ; absent, `https://login.leveragers.com` (un site
+  d'essai la fait pointer vers une fausse porte) ;
+- `sso_redirect_options.immediate` doit quitter config.json : il enverrait d'abord à la connexion du serveur par
+  défaut, sans passer par l'écran. `default_server_config` reste (Element en exige un ; c'est le serveur pro).
+
+Site d'essai : un serveur de discussion n'enregistre un client OIDC que pour les adresses de retour de sa liste
+(`agents.leveragers.com`…) ; ailleurs, l'enregistrement répond 403 et Element passe à l'ancienne connexion SSO
+(`/login/sso/redirect`), sans `login_hint`. Un site d'essai déclare donc `oidc_static_clients` pour l'émetteur de
+`chat.leveragers.com` dans son config.json (jamais dans celui de production).
+
+Code neuf : `src/vector/leveragers/frontDoor.ts` (`findServer`, `isAllowedServer`, le cookie, + tests),
+`src/vector/leveragers/SignInScreen.tsx` (l'écran, dans sa propre racine React, chargé à part, + tests).
+
+Points d'accroche dans Element :
+
+- `src/vector/app.tsx`, `loadApp` : déconnecté et pas en retour de connexion, l'écran est dessiné avant le montage
+  de `MatrixChat` (la page d'accueil d'Element n'apparaît pas dessous) ; `MatrixChat` reçoit `onNewScreenOrSignIn`,
+  qui remontre l'écran quand Element passe à ses écrans `welcome` ou `login` (après une déconnexion, ou une
+  connexion qui échoue au retour). `signInOnServer` refuse tout serveur hors `isAllowedServer`.
+- `src/utils/oauth/authorize.ts`, `startOAuthLogin` : dernier paramètre `loginHint`, ajouté (encodé) à la fin de
+  l'adresse d'autorisation avant de la suivre.
+
+À revérifier à chaque nouveau tag d'Element :
+
+- `startOAuthLogin` est toujours la fonction qui produit l'adresse d'autorisation et la suit, et `redirectToSso`
+  celle qui l'appelle au démarrage ;
+- `MatrixChat` n'envoie `welcome` et `login` à `onNewScreen` que pour une session déconnectée (règle
+  `AUTH_SCREENS` de `showScreen`) ;
+- `loadApp` lit toujours la session (`getStoredSessionOwner`) et le retour de connexion (`legacy_sso`, `oauth2`)
+  avant le montage de `MatrixChat`.
 
 ## `feat/cle-recuperation-gardee` : clé de récupération gardée par Leveragers
 

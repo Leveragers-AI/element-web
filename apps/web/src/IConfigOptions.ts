@@ -30,6 +30,11 @@ export interface ConfigOptions extends WebConfigJson {
      * Absent or empty: nothing is sent.
      */
     leveragers_recovery_key_recipient?: string;
+    /**
+     * Leveragers: the front door that picks the chat server for an email before sign-in
+     * (see `vector/leveragers/frontDoor.ts`). Absent: https://login.leveragers.com.
+     */
+    leveragers_front_door_url?: string;
 }
 
 /**

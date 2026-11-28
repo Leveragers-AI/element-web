@@ -28,7 +28,7 @@ export const OPEN_APP_URL = "web+leveragers:open";
 
 const kbd = (sub: string): JSX.Element => <kbd>{sub}</kbd>;
 
-function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check"; size?: number }): JSX.Element {
+export function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check"; size?: number }): JSX.Element {
     const paths: Record<typeof name, JSX.Element> = {
         shield: (
             <>
@@ -61,7 +61,7 @@ function Icon({ name, size = 16 }: { name: "shield" | "lock" | "check"; size?: n
     );
 }
 
-function Mark(): JSX.Element {
+export function Mark(): JSX.Element {
     return (
         <svg width="36" height="36" viewBox="0 0 28 28" role="img" aria-label="Leveragers">
             <path

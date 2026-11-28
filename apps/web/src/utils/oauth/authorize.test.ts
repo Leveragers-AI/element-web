@@ -93,6 +93,22 @@ describe("OAuth2 authorization", () => {
 
             expect(authUrl.searchParams.get("response_mode")).toEqual("fragment");
         });
+
+        // Leveragers (feat/front-door): the typed email reaches the sign-in page as `login_hint`.
+        it("adds login_hint at the end of the authorization address", async () => {
+            await startOAuthLogin(
+                delegatedAuthConfig,
+                clientId,
+                homeserverUrl,
+                undefined,
+                undefined,
+                "Jo+x@acme.example",
+            );
+
+            expect(window.location.href).toMatch(/&login_hint=Jo%2Bx%40acme\.example$/);
+            expect(new URL(window.location.href).searchParams.get("login_hint")).toEqual("Jo+x@acme.example");
+            expect(new URL(window.location.href).searchParams.get("client_id")).toEqual(clientId);
+        });
     });
 
     describe("completeOAuth2Login()", () => {

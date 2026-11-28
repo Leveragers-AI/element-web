@@ -1713,6 +1713,12 @@
         "success_title_mac": "Dernière étape : gardez-la dans le Dock",
         "success_title_windows": "Dernière étape : épinglez l’application à la barre des tâches"
     },
+    "leveragers_sign_in": {
+        "continue": "Continuer",
+        "email_label": "E-mail",
+        "front_door_error": "Connexion impossible pour le moment. Vérifiez votre connexion et réessayez.",
+        "invalid_email": "Saisissez une adresse e-mail valide."
+    },
     "lightbox": {
         "rotate_left": "Tourner à gauche",
         "rotate_right": "Tourner à droite",

@@ -25,6 +25,7 @@ const RESPONSE_MODE = "fragment";
  * @param homeserverUrl target homeserver
  * @param identityServerUrl OPTIONAL target identity server
  * @param isRegistration if true will set the prompt to "create"
+ * @param loginHint OPTIONAL (Leveragers) the email the person typed, passed to the sign-in page as `login_hint`
  * @returns Promise that resolves after we have navigated to auth endpoint
  */
 export const startOAuthLogin = async (
@@ -33,6 +34,7 @@ export const startOAuthLogin = async (
     homeserverUrl: string,
     identityServerUrl?: string,
     isRegistration?: boolean,
+    loginHint?: string,
 ): Promise<void> => {
     const platform = PlatformPeg.get()!;
     const state = secureRandomString(32) + platform.getOAuthClientState();
@@ -53,7 +55,10 @@ export const startOAuthLogin = async (
         isRegistration ? "create" : undefined,
     );
 
-    window.location.href = authorizationUrl;
+    // Leveragers: matrix-js-sdk has no option for `login_hint`; our chat sign-in page reads it.
+    window.location.href = loginHint
+        ? `${authorizationUrl}${authorizationUrl.includes("?") ? "&" : "?"}login_hint=${encodeURIComponent(loginHint)}`
+        : authorizationUrl;
 };
 
 /**
